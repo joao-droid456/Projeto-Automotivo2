@@ -36,28 +36,33 @@ export class ManualWheelSession {
   constructor(
     inspection,
     vehicle,
-    { order, progress, activityId = 'montagem-roda', onChange = () => {} } = {},
+    { order, progress, activityId = 'montagem-roda', wheelId, onChange = () => {} } = {},
   ) {
+    const station = vehicle?.wheelStations?.get(wheelId || 'front-wheel-left');
+    const wheel = station?.wheel || (!wheelId ? vehicle?.activeWheel : null);
+    const bolts = station?.bolts || vehicle?.bolts;
+    const supports = station?.supports || vehicle?.wheelSupports;
     if (
-      !vehicle?.activeWheel?.visible ||
-      vehicle.bolts?.length !== 4 ||
-      !vehicle.wheelSupports?.length ||
-      !vehicle.bolts.every(bolt => bolt.parent === vehicle.activeWheel && bolt.visible)
+      !wheel?.visible ||
+      bolts?.length !== 4 ||
+      !supports?.length ||
+      !bolts.every(bolt => bolt.parent === wheel && bolt.visible)
     )
       throw new Error('Esta prática requer a roda montada, quatro fixadores e os apoios do carro didático.');
     Object.assign(this, { inspection, vehicle, progress, activityId, onChange });
+    this.wheelId = wheelId || 'front-wheel-left';
+    this.bolts = bolts;
+    this.supports = supports;
     this.activity = new WheelMaintenanceActivity(order);
     this.active = true;
     this.busy = false;
     this.wheelAngle = 0;
     this.canvas = inspection.engine.renderer.domElement;
     this.orbit = inspection.orbit;
-    this.wheel = vehicle.activeWheel;
-    this.supportObject = vehicle.wheelSupports.find(
-      object => object.position.z > 0 && object.position.y > 0.1,
-    );
-    if (!this.supportObject) throw new Error('Apoio dianteiro indisponível.');
-    this.snapshots = [remember(this.wheel), ...vehicle.bolts.map(remember)];
+    this.wheel = wheel;
+    this.supportObject = supports.find(object => object.position.y > 0.1);
+    if (!this.supportObject) throw new Error('Apoio da roda indisponível.');
+    this.snapshots = [remember(this.wheel), ...bolts.map(remember)];
     this.savedView = {
       position: inspection.camera.position.clone(),
       quaternion: inspection.camera.quaternion.clone(),
@@ -74,7 +79,8 @@ export class ManualWheelSession {
     vehicle.group.updateWorldMatrix(true, true);
     this.seat = this.wheel.getWorldPosition(new THREE.Vector3());
     this.seatQuaternion = this.wheel.getWorldQuaternion(new THREE.Quaternion());
-    this.axis = new THREE.Vector3(0, 0, 1).transformDirection(vehicle.group.matrixWorld);
+    this.axis = new THREE.Vector3(0, 0, 1).transformDirection(this.wheel.matrixWorld);
+    this.right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.seatQuaternion);
     this.pointer = new THREE.Vector2();
     this.raycaster = new THREE.Raycaster();
     this.drag = new ConstrainedPartDrag();
@@ -127,11 +133,16 @@ export class ManualWheelSession {
       this.stage.add(group);
       return { group, hit, ring };
     };
-    this.boltMarkers = this.vehicle.bolts.map((_, index) => marker('bolt', index));
+    this.boltMarkers = this.bolts.map((_, index) => marker('bolt', index));
     this.supportMarker = marker('support');
     this.supportMarker.group.scale.setScalar(1.5);
     this.supportPoint = this.supportObject.getWorldPosition(new THREE.Vector3());
-    this.supportMarker.group.position.copy(this.supportPoint).add(new THREE.Vector3(0.43, -0.08, 0.3));
+    this.supportMarker.group.position
+      .copy(this.supportPoint)
+      .addScaledVector(this.right, 0.43)
+      .addScaledVector(this.axis, 0.3);
+    this.supportMarker.group.position.y -= 0.08;
+    this.supportMarker.group.quaternion.copy(this.seatQuaternion);
     const line = new THREE.BufferGeometry().setFromPoints([
       this.supportPoint,
       this.supportMarker.group.position,
@@ -144,21 +155,29 @@ export class ManualWheelSession {
     this.hubMarker = marker('hub');
     this.hubMarker.group.scale.setScalar(1.4);
     this.hubMarker.group.position.copy(this.seat).addScaledVector(this.axis, 0.23);
+    this.hubMarker.group.quaternion.copy(this.seatQuaternion);
     this.snapRing = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color: '#8bceda', transparent: true, opacity: 0.65, depthTest: false }),
     );
     this.snapRing.scale.setScalar(8.6);
     this.snapRing.position.copy(this.seat).addScaledVector(this.axis, 0.12);
+    this.snapRing.quaternion.copy(this.seatQuaternion);
     this.stage.add(this.snapRing);
     const tray = new THREE.Mesh(
       new THREE.BoxGeometry(1.45, 0.045, 0.55),
       new THREE.MeshStandardMaterial({ color: '#495d68', metalness: 0.3, roughness: 0.7 }),
     );
-    tray.position.copy(this.seat).add(new THREE.Vector3(0.85, -0.43, 0.8));
+    tray.position.copy(this.seat).addScaledVector(this.right, 0.85).addScaledVector(this.axis, 0.8);
+    tray.position.y -= 0.43;
+    tray.quaternion.copy(this.seatQuaternion);
     this.stage.add(tray);
-    this.traySlots = this.vehicle.bolts.map((_, i) =>
-      this.seat.clone().add(new THREE.Vector3(0.28 + i * 0.17, -0.375, 0.64)),
+    this.traySlots = this.bolts.map((_, i) =>
+      this.seat
+        .clone()
+        .addScaledVector(this.right, 0.28 + i * 0.17)
+        .addScaledVector(this.axis, 0.64)
+        .add(new THREE.Vector3(0, -0.375, 0)),
     );
     this.toolMesh = new THREE.Group();
     this.stage.add(this.toolMesh);
@@ -210,10 +229,15 @@ export class ManualWheelSession {
     this.orbit.maxDistance = 4.5;
     this.orbit.minPolarAngle = 0.45;
     this.orbit.maxPolarAngle = 1.7;
-    this.orbit.minAzimuthAngle = -0.65;
-    this.orbit.maxAzimuthAngle = 0.65;
-    this.orbit.target.copy(this.seat).add(new THREE.Vector3(0.3, 0, 0.3));
-    this.inspection.camera.position.copy(this.orbit.target).add(new THREE.Vector3(0.12, 0.62, 2.35));
+    const azimuth = Math.atan2(this.axis.x, this.axis.z);
+    this.orbit.minAzimuthAngle = azimuth - 0.65;
+    this.orbit.maxAzimuthAngle = azimuth + 0.65;
+    this.orbit.target.copy(this.seat).addScaledVector(this.right, 0.3).addScaledVector(this.axis, 0.3);
+    this.inspection.camera.position
+      .copy(this.orbit.target)
+      .addScaledVector(this.right, 0.12)
+      .addScaledVector(this.axis, 2.35);
+    this.inspection.camera.position.y += 0.62;
     this.orbit.update();
   }
   rayFromClient(x, y) {
@@ -239,7 +263,7 @@ export class ManualWheelSession {
     for (const hit of this.raycaster.intersectObjects(this.pickObjects, true)) {
       if (hit.object.userData.manualTarget) return hit.object.userData.manualTarget;
       for (let object = hit.object; object; object = object.parent) {
-        const index = this.vehicle.bolts.indexOf(object);
+        const index = this.bolts.indexOf(object);
         if (index >= 0) return { kind: 'bolt', index };
         if (object === this.wheel) return { kind: 'wheel' };
       }
@@ -272,7 +296,7 @@ export class ManualWheelSession {
     if (this.busy || this.activity.completed) return;
     const a = this.activity;
     if (target.kind === 'support' && a.phase === 'prepare') {
-      this.notify(a.confirmSupport(this.vehicle.wheelSupports.length > 0).message);
+      this.notify(a.confirmSupport(this.supports.length > 0).message);
       return;
     }
     if (target.kind === 'hub' && a.phase === 'verify') {
@@ -292,8 +316,9 @@ export class ManualWheelSession {
           return;
         }
         this.capture(event, { kind: 'turn', index: target.index, phase: a.phase });
-        this.vehicle.bolts[target.index].getWorldPosition(this.toolMesh.position);
+        this.bolts[target.index].getWorldPosition(this.toolMesh.position);
         this.toolMesh.position.addScaledVector(this.axis, 0.055);
+        this.toolMesh.quaternion.copy(this.seatQuaternion);
         this.toolMesh.children[0].material.color.set(a.tool === 'torque' ? '#8bc7df' : '#e1b45b');
         this.toolMesh.visible = true;
         return;
@@ -356,12 +381,10 @@ export class ManualWheelSession {
       const progress = this.activity.turns[g.index];
       const angle = progress * Math.PI * 2 * (g.phase === 'loosen' ? 1 : -1);
       this.rotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, angle);
-      this.vehicle.bolts[g.index].quaternion
-        .copy(this.snapshots[g.index + 1].quaternion)
-        .multiply(this.rotation);
-      this.vehicle.bolts[g.index].getWorldPosition(this.toolMesh.position);
+      this.bolts[g.index].quaternion.copy(this.snapshots[g.index + 1].quaternion).multiply(this.rotation);
+      this.bolts[g.index].getWorldPosition(this.toolMesh.position);
       this.toolMesh.position.addScaledVector(this.axis, 0.055);
-      this.toolMesh.quaternion.setFromAxisAngle(this.axis, angle);
+      this.toolMesh.quaternion.setFromAxisAngle(this.axis, angle).multiply(this.seatQuaternion);
       this.inspection.panel.manualProgress?.(g.index, progress);
       if (progress === 1) {
         g.finished = true;
@@ -383,8 +406,10 @@ export class ManualWheelSession {
     ) {
       this.delta.copy(this.tmp).sub(this.seat);
       this.delta.addScaledVector(this.axis, -this.delta.dot(this.axis));
-      this.delta.x = THREE.MathUtils.clamp(this.delta.x, -0.8, 1.45);
-      this.delta.y = THREE.MathUtils.clamp(this.delta.y, 0, 0.7);
+      const horizontal = THREE.MathUtils.clamp(this.delta.dot(this.right), -0.8, 1.45);
+      const vertical = THREE.MathUtils.clamp(this.delta.y, 0, 0.7);
+      this.delta.copy(this.right).multiplyScalar(horizontal);
+      this.delta.y = vertical;
       const lateral = this.delta.length();
       const outward =
         g.phase === 'removeWheel'
@@ -405,7 +430,7 @@ export class ManualWheelSession {
     this.claim(event);
     this.releaseInput();
     if (g.kind === 'turn' && g.finished) {
-      const bolt = this.vehicle.bolts[g.index];
+      const bolt = this.bolts[g.index];
       const target = this.snapshots[g.index + 1].position.clone();
       if (g.phase === 'loosen') target.z += 0.035;
       this.animate(bolt, target, this.snapshots[g.index + 1].quaternion, () => this.notify(), 0.18);
@@ -425,7 +450,7 @@ export class ManualWheelSession {
   }
 
   transferBolt(index, phase) {
-    const bolt = this.vehicle.bolts[index];
+    const bolt = this.bolts[index];
     this.stage.attach(bolt);
     if (phase === 'removeBolts') {
       this.animate(bolt, this.traySlots[index], new THREE.Quaternion(), () =>
@@ -497,10 +522,10 @@ export class ManualWheelSession {
     this.supportMarker.ring.visible = this.supportLine.visible = a.phase === 'prepare';
     this.hubMarker.ring.visible = a.phase === 'verify';
     this.snapRing.visible = ['removeWheel', 'returnWheel'].includes(a.phase);
-    this.vehicle.bolts.forEach((bolt, i) => {
+    this.bolts.forEach((bolt, i) => {
       const marker = this.boltMarkers[i];
       bolt.getWorldPosition(marker.group.position);
-      marker.group.quaternion.identity();
+      marker.group.quaternion.copy(this.seatQuaternion);
       if (bolt.parent === this.stage) marker.group.rotation.x = -Math.PI / 2;
       else marker.group.position.addScaledVector(this.axis, 0.035);
       marker.ring.visible = ['loosen', 'removeBolts', 'installBolts', 'tighten'].includes(a.phase);

@@ -62,7 +62,7 @@ export class AppUI {
   }
   updateProgress(progress) {
     const result = progress.data.completed['preparar-bancada'];
-    const practice = progress.data.completed['montagem-roda'];
+    const practice = progress.data.completed['montagem-roda'] || Object.entries(progress.data.completed).find(([id]) => id.startsWith('montagem-roda:'))?.[1];
     const services = Number(Boolean(practice)) + ['filter', 'battery', 'lights'].filter(id => progress.data.completed[`servico-${id}`]).length
       + ['corolla', 'hb20', 'gol'].filter(id => progress.data.completed[`troca-oleo-${id}`]).length;
     if (services) {

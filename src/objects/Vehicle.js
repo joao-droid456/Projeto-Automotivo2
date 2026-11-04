@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { createUndercarriage } from './Undercarriage.js';
 import { createVehicleExterior } from './VehicleExterior.js';
+import { createVehicleInterior } from './VehicleInterior.js';
 
 const metal = new THREE.MeshStandardMaterial({ color: '#a9afb0', roughness: 0.32, metalness: 0.8 });
 const rubber = new THREE.MeshStandardMaterial({ color: '#252628', roughness: 0.93 });
@@ -75,6 +76,8 @@ export class Vehicle {
     this.undercarriage = createUndercarriage({ metal, black, rubber, serviceable: options.serviceable });
     this.group.add(this.undercarriage);
     this.group.add(createVehicleExterior({ body: orange, trim: black, metal, glass }));
+    this.interior = createVehicleInterior();
+    this.group.add(this.interior);
     // Flancs extrudés avec véritables passages de roue, pas de cube posé sur quatre roues.
     const profile = new THREE.Shape();
     profile.moveTo(-1.95, 0.48); profile.lineTo(-1.97, 0.88);
@@ -122,6 +125,7 @@ export class Vehicle {
         if (o.material === glass) o.castShadow = false;
       });
       if (options.serviceable) this.hood.traverse(o => { o.userData.static = false; });
+      this.interior.traverse(o => { o.userData.static = false; });
       return;
     }
     this.engine = new THREE.Group(); this.engine.position.set(-1.4, 0.8, 0); this.group.add(this.engine);
@@ -151,28 +155,38 @@ export class Vehicle {
       wheel.userData.inspectionPart = `${x < 0 ? 'front' : 'rear'}-wheel-${side > 0 ? 'left' : 'right'}`;
       this.group.add(wheel); this.wheels.push(wheel);
     }
-    this.activeWheel = this.wheels[1]; // Frente, lado +Z: removível na atividade.
+    this.activeWheel = this.wheels[1]; // Referência da atividade de montagem original.
     this.hubLocal = new THREE.Vector3(-1.24, 0.4, 0.84);
-    this.hubGroup = new THREE.Group(); this.hubGroup.position.copy(this.hubLocal); this.group.add(this.hubGroup);
-    this.hubGroup.userData.inspectionPart = 'front-wheel-left';
-    cylinder(0.17, 0.065, metal, [0, 0, -0.025], this.hubGroup).userData.inspectionPart = 'wheel-hub';
-    cylinder(0.055, 0.11, metal, [0, 0, 0.03], this.hubGroup).userData.inspectionPart = 'wheel-hub';
-    round([0.09, 0.18, 0.09], paint('#7b7d70'), [0.155, 0.03, -0.02], this.hubGroup, 0.025);
+    this.wheelStations = new Map();
+    for (const wheel of this.wheels) {
+      const hub = new THREE.Group(); hub.position.copy(wheel.position); hub.quaternion.copy(wheel.quaternion); this.group.add(hub);
+      hub.userData.inspectionPart = wheel.userData.inspectionPart;
+      cylinder(0.17, 0.065, metal, [0, 0, -0.025], hub).userData.inspectionPart = 'wheel-hub';
+      cylinder(0.055, 0.11, metal, [0, 0, 0.03], hub).userData.inspectionPart = 'wheel-hub';
+      round([0.09, 0.18, 0.09], paint('#7b7d70'), [0.155, 0.03, -0.02], hub, 0.025);
+      this.wheelStations.set(wheel.userData.inspectionPart, { wheel, hub, supports: [] });
+    }
+    this.hubGroup = this.wheelStations.get('front-wheel-left').hub;
     // Suporte fixo didático sob o eixo. Não é um elevador operável.
     this.wheelSupports = [];
-    for (const side of options.color ? [] : [-1, 1]) {
-      const base = round([0.36, 0.045, 0.45], black, [-1.24, 0.025, side * 0.5], this.group);
-      const support = round([0.13, 0.31, 0.13], metal, [-1.24, 0.2, side * 0.5], this.group);
+    for (const x of [-1.24, 1.21]) for (const side of options.color ? [] : [-1, 1]) {
+      const base = round([0.36, 0.045, 0.45], black, [x, 0.025, side * 0.5], this.group);
+      const support = round([0.13, 0.31, 0.13], metal, [x, 0.2, side * 0.5], this.group);
       for (const object of [base, support]) { object.userData.inspectionPart = 'wheel-support'; this.wheelSupports.push(object); }
+      this.wheelStations.get(`${x < 0 ? 'front' : 'rear'}-wheel-${side > 0 ? 'left' : 'right'}`).supports.push(base, support);
     }
     this.boltPositions = Array.from({ length: 4 }, (_, i) => {
       const a = i * Math.PI / 2; return new THREE.Vector3(Math.sin(a) * 0.105, Math.cos(a) * 0.105, 0.17);
     });
-    this.bolts = this.boltPositions.map(p => cylinder(0.023, 0.045, metal.clone(), [p.x, p.y, p.z], this.activeWheel, 6));
-    this.bolts.forEach(bolt => { bolt.userData.inspectionPart = 'wheel-fastener'; });
+    for (const station of this.wheelStations.values()) {
+      station.bolts = this.boltPositions.map(p => cylinder(0.023, 0.045, metal.clone(), [p.x, p.y, p.z], station.wheel, 6));
+      station.bolts.forEach(bolt => { bolt.userData.inspectionPart = 'wheel-fastener'; });
+    }
+    this.bolts = this.wheelStations.get('front-wheel-left').bolts;
     this.homeWheelPosition = this.activeWheel.position.clone();
     this.hoodOpen = false;
     if (options.color) this.group.traverse(o => { if (o.isMesh) o.userData.static = true; });
+    this.interior.traverse(o => { o.userData.static = false; });
   }
   setHood(open) { this.hoodOpen = open; }
   update(dt) {

@@ -55,7 +55,15 @@ test('identificação detalhada da roda permanece após batching e mantém a op�
     selectedPart: { id: 'tire', actionId: 'front-wheel-left' },
     assemblyDefinition: definition,
     workbench: {
-      vehicle: { filter: {} },
+      vehicle: {
+        filter: {},
+        wheelStations: new Map(
+          ['front-wheel-left', 'front-wheel-right', 'rear-wheel-left', 'rear-wheel-right'].map(id => [
+            id,
+            {},
+          ]),
+        ),
+      },
       restore() {
         restored++;
       },
@@ -69,6 +77,13 @@ test('identificação detalhada da roda permanece após batching e mantém a op�
   session.selectPart({ id: 'wheel-rim', actionId: 'front-wheel-left' });
   assert.equal(restored, 0);
   assert.ok(actions.some(action => action.id === 'start-wheel'));
+  for (const actionId of ['front-wheel-right', 'rear-wheel-left', 'rear-wheel-right']) {
+    session.selectPart({ id: 'wheel-rim', actionId });
+    assert.ok(
+      actions.some(action => action.id === 'start-wheel'),
+      actionId,
+    );
+  }
   disposeObject3D(vehicle.group);
 });
 

@@ -6,12 +6,14 @@ import { disposeObject3D } from '../utils/DisposeUtils.js';
 import { InspectionPartSelection } from './InspectionPartSelection.js';
 import { InspectionWorkbench } from './InspectionWorkbench.js';
 import { ManualWheelSession } from './ManualWheelSession.js';
+import { VEHICLE_PARTS } from '../vehicles/VehicleParts.js';
 
 export class InspectionSession {
   constructor(engine, panel, onExit, { createOrbit, loadModel, progress, assemblyDefinition } = {}) {
     Object.assign(this, { engine, panel, onExit, progress, assemblyDefinition });
     panel.onAction = id => this.partAction(id);
     panel.onOverview = () => this.overview();
+    panel.onInterior = () => this.toggleInterior();
     this.createOrbit = createOrbit || ((camera, canvas) => new OrbitControls(camera, canvas));
     this.loadModel =
       loadModel ||
@@ -83,6 +85,7 @@ export class InspectionSession {
       const candidate = new THREE.Group();
       candidate.add(root);
       frameInspectionModel(candidate, this.camera, this.orbit);
+      this.restoreExterior();
       this.parts?.dispose();
       this.workbench?.restore();
       this.borrowed.restore();
@@ -102,6 +105,11 @@ export class InspectionSession {
   }
 
   bindParts() {
+    this.interiorRoot = null;
+    (this.ownedModel || this.borrowed.root).traverse(object => {
+      if (object.userData.vehicleInterior) this.interiorRoot = object;
+    });
+    this.panel.interiorView?.(Boolean(this.interiorRoot));
     const vehicle = this.borrowed ? this.vehicleDescriptor.vehicle : null;
     this.workbench = new InspectionWorkbench(vehicle, this.assemblyDefinition, this.progress);
     this.selectedPart = null;
@@ -125,9 +133,9 @@ export class InspectionSession {
     if (this.manual?.active) {
       this.panel.part?.(
         {
-          name: 'Troca manual da roda',
+          name: `Troca manual · ${VEHICLE_PARTS[this.manual.wheelId]?.name || 'Roda'}`,
           description:
-            'Roda dianteira esquerda do carro didático. Selecione a ferramenta e trabalhe diretamente nas peças.',
+            'Selecione a ferramenta e trabalhe diretamente nas peças desta roda. Cada roda tem seus próprios fixadores e resultado.',
         },
         [{ id: 'stop-manual-wheel', label: 'Encerrar prática e restaurar peças' }],
         this.manual.activity.instruction,
@@ -143,9 +151,10 @@ export class InspectionSession {
     } else {
       if (['hood', 'engine', 'filter', 'battery'].includes(part.id) && vehicle?.hood)
         actions.push({ id: 'hood', label: vehicle.hoodOpen ? 'Fechar capô' : 'Abrir capô' });
-      const job = { filter: 'filter', battery: 'battery', lights: 'lights', 'front-wheel-left': 'wheel' }[
-        part.actionId || part.id
-      ];
+      const partId = part.actionId || part.id;
+      const job = vehicle?.wheelStations?.has(partId)
+        ? 'wheel'
+        : { filter: 'filter', battery: 'battery', lights: 'lights' }[partId];
       if (job && vehicle?.filter && (job !== 'wheel' || this.assemblyDefinition))
         actions.push({
           id: `start-${job}`,
@@ -173,11 +182,14 @@ export class InspectionSession {
     if (id === 'start-wheel') {
       if (this.manual?.active) return;
       try {
+        this.restoreExterior();
         this.workbench.restore();
+        const wheelId = this.selectedPart.actionId || this.selectedPart.id;
         this.manual = new ManualWheelSession(this, this.workbench.vehicle, {
           order: this.assemblyDefinition?.boltOrder,
           progress: this.progress,
-          activityId: this.assemblyDefinition?.id,
+          activityId: `${this.assemblyDefinition?.id || 'montagem-roda'}:${wheelId}`,
+          wheelId,
           onChange: () => this.renderPart(),
         });
         // Keep the active mechanical graph stable if the optional detail fetch is still pending.
@@ -229,7 +241,56 @@ export class InspectionSession {
       this.manual.focus();
       return;
     }
-    if (this.active) frameInspectionModel(this.container, this.camera, this.orbit);
+    if (this.active) {
+      this.restoreExterior();
+      frameInspectionModel(this.container, this.camera, this.orbit);
+    }
+  }
+
+  toggleInterior() {
+    if (!this.active || !this.interiorRoot || this.manual?.active) return;
+    if (this.hiddenExterior) {
+      this.restoreExterior();
+      frameInspectionModel(this.container, this.camera, this.orbit);
+      return;
+    }
+    this.workbench?.restore();
+    this.hiddenExterior = [];
+    const root = this.ownedModel || this.borrowed.root;
+    root.traverse(object => {
+      if (!object.isMesh) return;
+      for (let node = object; node; node = node.parent) if (node === this.interiorRoot) return;
+      this.hiddenExterior.push({ object, visible: object.visible });
+      object.visible = false;
+    });
+    root.updateWorldMatrix(true, true);
+    const bounds = new THREE.Box3().setFromObject(this.interiorRoot);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const radius = bounds.getSize(new THREE.Vector3()).length();
+    this.orbit.target.copy(center);
+    this.camera.position.copy(center).add(new THREE.Vector3(radius * 0.7, radius * 0.52, radius * 0.62));
+    this.orbit.minDistance = 0.15;
+    this.orbit.update();
+    if (this.parts) {
+      this.parts.dirty = true;
+      this.parts.outline && (this.parts.outline.visible = false);
+    }
+    this.panel.hover?.(null);
+    this.panel.interiorView?.(true, true);
+    this.selectedPart = null;
+    this.panel.part?.(null, []);
+    this.panel.status(
+      'Interior em corte · Arraste para girar e aproxime para explorar bancos, painel e controles.',
+    );
+  }
+
+  restoreExterior() {
+    if (!this.hiddenExterior) return;
+    for (const { object, visible } of this.hiddenExterior) object.visible = visible;
+    this.hiddenExterior = null;
+    this.panel.interiorView?.(Boolean(this.interiorRoot));
+    if (this.parts) this.parts.dirty = true;
+    this.panel.status('Passe o mouse nas peças e clique para examinar.');
   }
 
   update(dt = 0) {
@@ -256,6 +317,7 @@ export class InspectionSession {
     this.abort.abort();
     this.assets?.dispose();
     this.assets = null;
+    this.restoreExterior();
     this.manual?.dispose();
     this.manual = null;
     this.parts?.dispose();

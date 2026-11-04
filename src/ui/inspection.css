@@ -1,3 +1,19 @@
+.engine-parts-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 20px;
+}
+.engine-parts-list button {
+  text-align: left;
+  font-size: 12px;
+  padding: 9px 12px;
+}
+.engine-parts-list button[aria-pressed='true'] {
+  background: #40516a;
+  border-color: #e1bd71;
+  color: #ffe0a3;
+}
 .vehicle-inspection {
   position: absolute;
   inset: 0;

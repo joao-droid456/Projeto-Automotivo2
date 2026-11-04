@@ -1,11 +1,63 @@
 const part = (name, description) => ({ name, description });
 
 export const VEHICLE_PARTS = {
+  'cabin-floor': part('Assoalho da cabine', 'Piso do habitáculo, com espaço para os pés e apoio dos bancos.'),
+  'front-seat': part(
+    'Banco dianteiro',
+    'Assento e encosto para motorista ou passageiro, com apoios laterais.',
+  ),
+  'rear-seat': part(
+    'Banco traseiro',
+    'Assento e encosto traseiros com três posições representadas nesta cabine didática.',
+  ),
+  headrest: part(
+    'Apoio de cabeça',
+    'Apoio junto ao encosto do banco, representado com suas hastes de sustentação.',
+  ),
+  'seat-belt': part(
+    'Cinto e fecho',
+    'Conjunto de retenção dos ocupantes, com faixa e pontos de engate junto aos bancos.',
+  ),
+  dashboard: part(
+    'Painel de bordo',
+    'Estrutura dianteira da cabine que reúne instrumentos, saídas de ar e controles.',
+  ),
+  'instrument-panel': part(
+    'Quadro de instrumentos',
+    'Mostradores diante do motorista. As indicações são ilustrativas nesta simulação.',
+  ),
+  'steering-wheel': part(
+    'Volante',
+    'Comando de direção à frente do motorista, com aro, raios e região central.',
+  ),
+  'center-console': part(
+    'Console central',
+    'Área entre os bancos dianteiros que reúne os comandos centrais.',
+  ),
+  'gear-lever': part(
+    'Alavanca de câmbio',
+    'Comando representado para seleção das marchas. Esta cabine é uma representação genérica.',
+  ),
+  handbrake: part('Freio de estacionamento', 'Alavanca manual representada junto ao console central.'),
+  infotainment: part(
+    'Central multimídia',
+    'Tela ilustrativa no centro do painel; não possui aplicativos ativos.',
+  ),
+  'air-vent': part('Saída de ventilação', 'Difusor de ar do painel, representado com aletas horizontais.'),
+  pedals: part(
+    'Pedais',
+    'Comandos aos pés do motorista: embreagem, freio e acelerador nesta representação genérica.',
+  ),
+  'door-trim': part('Forro da porta', 'Revestimento interno da porta com apoio de braço e puxador.'),
+  'rearview-mirror': part(
+    'Retrovisor interno',
+    'Espelho central da cabine para observação da região traseira.',
+  ),
   body: part('Carroceria', 'Painéis externos que formam a estrutura e o acabamento do veículo.'),
   wheel: part('Roda e pneu', 'O pneu faz contato com o piso; o aro é fixado ao cubo por fixadores.'),
   'wheel-support': part(
     'Apoio fixo didático',
-    'Representa o apoio do conjunto dianteiro nesta simulação. A conferência virtual não substitui a verificação dos pontos de apoio, imobilização e equipamentos adequados em treinamento supervisionado.',
+    'Representa o apoio do eixo desta roda na simulação. A conferência virtual não substitui a verificação dos pontos de apoio, imobilização e equipamentos adequados em treinamento supervisionado.',
   ),
   tire: part(
     'Pneu',
@@ -99,7 +151,7 @@ for (const [axle, axleName] of [
   ]) {
     VEHICLE_PARTS[`${axle}-wheel-${side}`] = part(
       `Roda ${axleName} ${sideName}`,
-      'Conjunto formado pelo aro metálico, pneu e elementos de fixação. Passe sobre cada elemento para distingui-lo; a montagem guiada está disponível na roda dianteira esquerda do carro didático.',
+      'Conjunto formado pelo aro metálico, pneu e elementos de fixação. Passe sobre cada elemento para distingui-lo; a troca manual está disponível nas quatro rodas do carro didático.',
     );
     VEHICLE_PARTS[`${axle}-door-${side}`] = part(
       `Porta ${axleName} ${sideName}`,

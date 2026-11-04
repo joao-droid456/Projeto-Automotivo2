@@ -14,6 +14,8 @@ import { collectInspectableVehicles } from '../vehicles/InspectableVehicles.js';
 import { VehicleSelection } from '../systems/VehicleSelection.js';
 import { InspectionSession } from '../systems/InspectionSession.js';
 import { InspectionPanel } from '../ui/InspectionPanel.js';
+import { BenchEngine } from '../objects/BenchEngine.js';
+import { BenchEngineSession } from '../systems/BenchEngineSession.js';
 import '../ui/oil-change.css';
 import '../ui/inspection.css';
 
@@ -33,6 +35,7 @@ export function createGame(root) {
     assembly,
     oilChange,
     inspection,
+    benchEngine,
     vehicleSelection,
     state = 'loading',
     mode = 'free',
@@ -221,6 +224,12 @@ export function createGame(root) {
   function openEquipment() {
     if (state !== 'playing' || !interaction.current) return;
     const item = interaction.current;
+    if (item.data.type === 'bench-engine') {
+      setState('engine-inspection');
+      interaction.update(false);
+      benchEngine.open(item);
+      return;
+    }
     if (item.data.type === 'oil-change') {
       if (oilChange.open(item)) {
         panel.close();
@@ -284,6 +293,22 @@ export function createGame(root) {
         await engine.registry.register(data, message => ui.toast(message));
         if (disposed) return;
       }
+      const bench = engine.registry.items.get('bancada-demo');
+      if (bench) {
+        const top = bench.parts.get('tampo');
+        const motor = new BenchEngine({
+          position: [bench.data.position[0] - 0.35, 0, bench.data.position[2]],
+          size: [2.8, top.position.y + top.scale.y / 2 - 0.055, 1.1],
+        });
+        engine.world.root.add(motor.group);
+        engine.world.benchEngine = motor;
+        engine.registry.attach(motor);
+      }
+      benchEngine = new BenchEngineSession(
+        engine,
+        new InspectionPanel(root, () => benchEngine.close()),
+        resume,
+      );
       engine.registry.attach(new VehicleStation(engine.world.vehicle));
       for (const lift of engine.world.lifts) engine.registry.attach(lift);
       for (const lift of engine.world.lifts) engine.registry.attach(new MaintenanceStation(lift));
@@ -310,8 +335,19 @@ export function createGame(root) {
       );
       vehicleSelection = new VehicleSelection(
         engine,
-        collectInspectableVehicles(engine),
-        chooseVehicle,
+        [
+          ...collectInspectableVehicles(engine),
+          ...(engine.world.benchEngine
+            ? [{ id: 'motor-bancada', root: engine.world.benchEngine.group }]
+            : []),
+        ],
+        vehicle => {
+          if (vehicle.id === 'motor-bancada') {
+            setState('engine-inspection');
+            interaction.update(false);
+            benchEngine.open(engine.world.benchEngine);
+          } else chooseVehicle(vehicle);
+        },
         () => state === 'playing',
         [engine.renderer.domElement, ui.$('look-zone')],
       );
@@ -340,7 +376,8 @@ export function createGame(root) {
         e => {
           if (e.code === 'KeyE' && !e.repeat && state === 'playing') openEquipment();
           if (e.code === 'Escape') {
-            if (state === 'inspection') inspection.close();
+            if (state === 'engine-inspection') benchEngine.close();
+            else if (state === 'inspection') inspection.close();
             else if (state === 'vehicle-choice') resume();
             else if (state === 'playing') pause();
             else if (state === 'panel') {
@@ -378,6 +415,7 @@ export function createGame(root) {
     abort.abort();
     resetTouch.dispose?.();
     vehicleSelection?.dispose();
+    benchEngine?.dispose();
     inspection?.dispose();
     interaction?.update(false);
     oilChange?.dispose();

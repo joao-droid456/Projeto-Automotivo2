@@ -101,7 +101,7 @@ test('arraste por raio mantém o ponto de pega e não move ao encerrar ou em rai
   assert.equal(drag.move(start, target), false);
 });
 
-function fixture() {
+function fixture(wheelId, rotation = 0) {
   const canvas = new EventTarget(),
     captures = new Set();
   canvas.style = {};
@@ -112,6 +112,7 @@ function fixture() {
   const scene = new THREE.Scene(),
     vehicle = new Vehicle([0, 0, 0]);
   scene.add(vehicle.group);
+  vehicle.group.rotation.y = rotation;
   const camera = new THREE.PerspectiveCamera(45, 1000 / 600, 0.01, 100);
   camera.position.set(5, 3, 6);
   const orbit = {
@@ -139,6 +140,8 @@ function fixture() {
     panel: { manualProgress() {}, clearManualWheel() {}, hover() {} },
   };
   const session = new ManualWheelSession(inspection, vehicle, {
+    wheelId,
+    activityId: wheelId ? `montagem-roda:${wheelId}` : 'montagem-roda',
     progress: { complete: (...args) => saved.push(args) },
   });
   function screen(point) {
@@ -193,62 +196,76 @@ function fixture() {
   };
 }
 
-test('gestos reais do controlador soltam fixadores, removem, arrastam, encaixam e concluem sem clonar a roda', () => {
-  const f = fixture(),
-    { session: s, vehicle: v } = f;
-  const wheel = v.activeWheel,
-    originalParent = wheel.parent,
-    originalPosition = wheel.position.clone();
-  try {
-    f.click(s.supportMarker.group.position);
-    assert.equal(s.activity.phase, 'loosen');
-    s.selectTool('socket');
-    for (let i = 0; i < 4; i++) f.turn(i, -1);
-    assert.equal(s.activity.phase, 'removeBolts');
-    s.selectTool('hand');
-    for (let i = 0; i < 4; i++) {
-      s.syncTargets();
-      f.click(s.boltMarkers[i].group.position);
+for (const wheelId of ['front-wheel-left', 'front-wheel-right', 'rear-wheel-left', 'rear-wheel-right']) {
+  test(`troca completa com gestos na ${wheelId} preserva as outras rodas`, () => {
+    const f = fixture(wheelId),
+      { session: s, vehicle: v } = f;
+    const wheel = s.wheel,
+      originalParent = wheel.parent,
+      originalPosition = wheel.position.clone();
+    const others = [...v.wheelStations.values()]
+      .filter(station => station.wheel !== wheel)
+      .map(station => ({
+        ...station,
+        position: station.wheel.position.clone(),
+        quaternion: station.wheel.quaternion.clone(),
+      }));
+    try {
+      f.click(s.supportMarker.group.position);
+      assert.equal(s.activity.phase, 'loosen');
+      s.selectTool('socket');
+      for (let i = 0; i < 4; i++) f.turn(i, -1);
+      assert.equal(s.activity.phase, 'removeBolts');
+      s.selectTool('hand');
+      for (let i = 0; i < 4; i++) {
+        s.syncTargets();
+        f.click(s.boltMarkers[i].group.position);
+      }
+      assert.equal(s.activity.phase, 'removeWheel');
+      assert.ok(s.bolts.every(bolt => bolt.parent === s.stage));
+      let p = f.screen(wheel.getWorldPosition(new THREE.Vector3()));
+      f.emit('pointerdown', p);
+      f.emit('pointermove', { x: p.x + 160, y: p.y });
+      f.emit('pointerup', { x: p.x + 160, y: p.y });
+      assert.equal(s.activity.phase, 'returnWheel');
+      assert.equal(wheel.parent, s.stage);
+      assert.ok(wheel.position.distanceTo(s.seat) > 0.4);
+      p = f.screen(wheel.position);
+      const seat = f.screen(s.seat);
+      f.emit('pointerdown', p);
+      f.emit('pointermove', seat);
+      f.emit('pointerup', seat);
+      s.update(1);
+      assert.equal(s.activity.phase, 'installBolts');
+      assert.equal(wheel.parent, originalParent);
+      for (let i = 0; i < 4; i++) {
+        s.syncTargets();
+        f.click(s.boltMarkers[i].group.position);
+      }
+      assert.equal(s.activity.phase, 'tighten');
+      s.selectTool('torque');
+      for (const i of [0, 2, 1, 3]) f.turn(i, 1);
+      assert.equal(s.activity.phase, 'verify');
+      assert.equal(f.saved.length, 0);
+      s.selectTool('inspect');
+      f.click(s.hubMarker.group.position);
+      assert.equal(s.activity.completed, true);
+      assert.equal(f.saved.length, 1);
+      assert.equal(f.saved[0][0], `montagem-roda:${wheelId}`);
+      s.dispose();
+      assert.ok(wheel.position.equals(originalPosition));
+      assert.ok(s.bolts.every(bolt => bolt.parent === wheel && bolt.visible));
+      for (const other of others) {
+        assert.ok(other.wheel.position.equals(other.position));
+        assert.ok(other.wheel.quaternion.equals(other.quaternion));
+        assert.ok(other.bolts.every(bolt => bolt.parent === other.wheel && bolt.visible));
+      }
+      assert.equal(f.captures.size, 0);
+    } finally {
+      f.dispose();
     }
-    assert.equal(s.activity.phase, 'removeWheel');
-    assert.ok(v.bolts.every(bolt => bolt.parent === s.stage));
-    let p = f.screen(wheel.getWorldPosition(new THREE.Vector3()));
-    f.emit('pointerdown', p);
-    f.emit('pointermove', { x: p.x + 160, y: p.y });
-    f.emit('pointerup', { x: p.x + 160, y: p.y });
-    assert.equal(s.activity.phase, 'returnWheel');
-    assert.equal(wheel.parent, s.stage);
-    assert.ok(wheel.position.distanceTo(s.seat) > 0.4);
-    p = f.screen(wheel.position);
-    const seat = f.screen(s.seat);
-    f.emit('pointerdown', p);
-    f.emit('pointermove', seat);
-    f.emit('pointerup', seat);
-    s.update(1);
-    assert.equal(s.activity.phase, 'installBolts');
-    assert.equal(wheel.parent, originalParent);
-    for (let i = 0; i < 4; i++) {
-      s.syncTargets();
-      f.click(s.boltMarkers[i].group.position);
-    }
-    assert.equal(s.activity.phase, 'tighten');
-    s.selectTool('torque');
-    for (const i of [0, 2, 1, 3]) f.turn(i, 1);
-    assert.equal(s.activity.phase, 'verify');
-    assert.equal(f.saved.length, 0);
-    s.selectTool('inspect');
-    f.click(s.hubMarker.group.position);
-    assert.equal(s.activity.completed, true);
-    assert.equal(f.saved.length, 1);
-    assert.equal(v.activeWheel, wheel);
-    s.dispose();
-    assert.ok(wheel.position.equals(originalPosition));
-    assert.ok(v.bolts.every(bolt => bolt.parent === wheel && bolt.visible));
-    assert.equal(f.captures.size, 0);
-  } finally {
-    f.dispose();
-  }
-});
+  });
+}
 
 test('cancelar durante giro/animação libera captura, restaura objetos e não descarta recursos do veículo', () => {
   const f = fixture(),

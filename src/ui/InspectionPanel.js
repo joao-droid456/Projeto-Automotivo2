@@ -7,6 +7,13 @@ export class InspectionPanel {
     this.element.setAttribute('aria-labelledby', 'inspection-title');
     this.element.innerHTML = `<img class="inspection-background" alt="" aria-hidden="true"><div class="inspection-window"><header class="inspection-header"><div><small>INSPEÇÃO E MANUTENÇÃO</small><h1 id="inspection-title"></h1></div><div class="inspection-header-actions"><button type="button" data-overview>Ver carro inteiro</button><button class="primary" type="button" data-back>Voltar à oficina</button></div></header><div class="inspection-content"><div class="inspection-stage"><div class="inspection-canvas"></div><div class="inspection-tooltip hidden" role="tooltip"><strong></strong><span></span><small>Clique para mexer ou examinar</small></div><p class="inspection-stage-hint">Arraste para girar · Role para aproximar</p></div><aside class="inspection-part"><small>COMPONENTE SELECIONADO</small><h2></h2><p data-description></p><div class="inspection-part-actions"></div><p data-feedback role="status" aria-live="polite"></p></aside></div><footer class="inspection-footer"><p role="status" aria-live="polite"></p></footer></div>`;
     this.button = this.element.querySelector('[data-back]');
+    this.interiorButton = document.createElement('button');
+    this.interiorButton.type = 'button';
+    this.interiorButton.textContent = 'Ver interior';
+    this.interiorButton.hidden = true;
+    this.interiorButton.dataset.interior = '';
+    this.interiorButton.onclick = () => this.onInterior?.();
+    this.element.querySelector('.inspection-header-actions').prepend(this.interiorButton);
     this.button.onclick = onBack;
     this.element.querySelector('[data-overview]').onclick = () => this.onOverview?.();
     this.viewport = this.element.querySelector('.inspection-canvas');
@@ -114,6 +121,11 @@ export class InspectionPanel {
 
   status(message) {
     this.element.querySelector('.inspection-footer [role="status"]').textContent = message;
+  }
+  interiorView(available, active = false) {
+    this.interiorButton.hidden = !available;
+    this.interiorButton.textContent = active ? 'Ver exterior' : 'Ver interior';
+    this.interiorButton.setAttribute('aria-pressed', String(active));
   }
   manualWheel(view) {
     const section = document.createElement('section');
