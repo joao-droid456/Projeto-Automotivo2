@@ -83,6 +83,7 @@ export function createGame(root) {
     }
   }
   function home() {
+    engine?.outdoor?.exitCar();
     panel?.close();
     ui.closeModal();
     setState('home');
@@ -93,6 +94,7 @@ export function createGame(root) {
     ui.$('enter').focus();
   }
   function enter(selectedMode = mode) {
+    engine.outdoor.exitCar();
     mode = selectedMode;
     guideStep = 0;
     panel.close();
@@ -122,6 +124,7 @@ export function createGame(root) {
     ui.bind('resume', resume);
     ui.bind('pause-settings', () => showSettings('paused'));
     ui.bind('reset-position', () => {
+      engine.outdoor.exitCar();
       engine.controls.reset();
       resume();
     });
@@ -222,8 +225,23 @@ export function createGame(root) {
     }
   }
   function openEquipment() {
+    if (state === 'playing' && engine.outdoor.driving) {
+      if (!engine.outdoor.exitCar()) ui.toast('Mova o carro para um local com espaço para sair.');
+      return;
+    }
     if (state !== 'playing' || !interaction.current) return;
     const item = interaction.current;
+    if (item.data.type === 'gate') {
+      interaction.update(false);
+      if (!engine.gate.cross()) ui.toast('Aproxime-se do portão e deixe a passagem livre.');
+      return;
+    }
+    if (item.data.type === 'driving') {
+      engine.outdoor.enterCar();
+      interaction.update(false);
+      ui.toast('W/S: acelerar e ré · A/D: virar · Espaço: frear · E: sair. No celular, use o joystick.');
+      return;
+    }
     if (item.data.type === 'bench-engine') {
       setState('engine-inspection');
       interaction.update(false);
@@ -304,6 +322,7 @@ export function createGame(root) {
         engine.world.benchEngine = motor;
         engine.registry.attach(motor);
       }
+      for (const item of engine.world.root.userData.rearDisplays) engine.registry.attach(item);
       benchEngine = new BenchEngineSession(
         engine,
         new InspectionPanel(root, () => benchEngine.close()),
@@ -337,22 +356,27 @@ export function createGame(root) {
         engine,
         [
           ...collectInspectableVehicles(engine),
+          ...engine.world.root.userData.rearDisplays.map(item => ({
+            id: item.data.id,
+            root: item.group,
+            display: item,
+          })),
           ...(engine.world.benchEngine
             ? [{ id: 'motor-bancada', root: engine.world.benchEngine.group }]
             : []),
         ],
         vehicle => {
-          if (vehicle.id === 'motor-bancada') {
+          if (vehicle.display || vehicle.id === 'motor-bancada') {
             setState('engine-inspection');
             interaction.update(false);
-            benchEngine.open(engine.world.benchEngine);
+            benchEngine.open(vehicle.display || engine.world.benchEngine);
           } else chooseVehicle(vehicle);
         },
-        () => state === 'playing',
+        () => state === 'playing' && !engine.outdoor.outside,
         [engine.renderer.domElement, ui.$('look-zone')],
       );
       root.querySelector('.desktop-hint').textContent =
-        'W A S D · mover   Mouse · olhar   Clique no carro · inspecionar';
+        'W A S D · mover   E · interagir   Portão · E para atravessar';
       ui.bind('enter', () => enter('free'));
       ui.bind('how', () => showHelp('home'));
       ui.bind('activities', showActivities);
@@ -395,7 +419,11 @@ export function createGame(root) {
       engine.start(dt => {
         assembly.update(dt);
         oilChange.update(dt);
-        const target = interaction.update(state === 'playing');
+        const driving = engine.outdoor.driving;
+        const target = driving ? engine.outdoor.item : interaction.update(state === 'playing');
+        if (driving)
+          engine.outdoor.item.data.name = `E · Sair do carro · ${Math.round(Math.abs(engine.outdoor.speed) * 3.6)} km/h`;
+        else engine.outdoor.item.data.name = 'Carro da pista · E para dirigir';
         ui.updateInteraction(target, state === 'playing');
       });
       ui.show('loading', false);

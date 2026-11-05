@@ -18,7 +18,7 @@ export class Controls {
     const options = { signal: this.abort.signal };
     document.addEventListener('keydown', e => {
       if (!this.active || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space'].includes(e.code)) {
         this.keys.add(e.code); e.preventDefault();
       }
     }, options);
@@ -63,7 +63,7 @@ export class Controls {
     this.clear(); this.applyRotation();
   }
   update(dt) {
-    if (!this.active) return;
+    if (!this.active || this.driving) return;
     const k = this.keys;
     const x = Number(k.has('KeyD') || k.has('ArrowRight')) - Number(k.has('KeyA') || k.has('ArrowLeft')) + this.stick.x;
     const z = Number(k.has('KeyS') || k.has('ArrowDown')) - Number(k.has('KeyW') || k.has('ArrowUp')) + this.stick.y;

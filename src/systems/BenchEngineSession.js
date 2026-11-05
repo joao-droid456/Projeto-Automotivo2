@@ -27,10 +27,13 @@ export class BenchEngineSession {
     if (this.active) return;
     this.active = true;
     this.item = item;
+    this.descriptions = item.descriptions || engineParts;
+    this.panel.element.querySelector('h1').textContent = item.data.name;
+    this.panel.element.querySelector('.inspection-header small').textContent = item.descriptions ? 'ESTANTE · PEÇAS EM EXPOSIÇÃO' : 'MOTOR · COMPONENTES';
     this.targetOpen = this.running = false;
     this.engine.controls.stop();
     this.panel.captureBackground(this.engine);
-    this.panel.show('Explore o motor');
+    this.panel.show(item.data.name);
     this.viewport = this.panel.mountCanvas(this.engine.renderer.domElement);
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#222e39');
@@ -50,14 +53,14 @@ export class BenchEngineSession {
     this.orbit = new OrbitControls(this.camera, this.engine.renderer.domElement);
     this.orbit.enableDamping = true;
     // Reserve room for the exploded assembly before the user opens it.
-    item.setExplosion(1);
+    item.setExplosion?.(1);
     this.engine.setActiveView(this);
     this.frame();
-    item.setExplosion(0);
-    item.advance(0);
+    item.setExplosion?.(0);
+    item.advance?.(0);
     this.panel.observeResize(() => this.engine.resize());
     this.buildPartsList();
-    this.select('block');
+    this.select(Object.keys(this.descriptions)[0]);
     this.panel.status(
       'Modelo didático · Passe o mouse nas peças ou escolha na lista. Abra o motor para explorar o interior.',
     );
@@ -111,7 +114,7 @@ export class BenchEngineSession {
     this.list = document.createElement('div');
     this.list.className = 'engine-parts-list';
     this.list.setAttribute('aria-label', 'Peças do motor');
-    for (const [id, [name, description]] of Object.entries(engineParts)) {
+    for (const [id, [name, description]] of Object.entries(this.descriptions)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = name;
@@ -124,7 +127,7 @@ export class BenchEngineSession {
   }
 
   describe(id) {
-    return id ? { id, name: engineParts[id][0], description: engineParts[id][1] } : null;
+    return id ? { id, name: this.descriptions[id][0], description: this.descriptions[id][1] } : null;
   }
 
   select(id) {
@@ -136,6 +139,10 @@ export class BenchEngineSession {
   }
 
   renderActions() {
+    if (this.item.descriptions) {
+      this.panel.part(this.describe(this.selected), [], 'Escolha uma peça na lista ou diretamente no modelo.');
+      return;
+    }
     this.panel.part(
       this.describe(this.selected),
       [
@@ -176,10 +183,11 @@ export class BenchEngineSession {
   }
 
   update(dt) {
+    if (this.item.descriptions) { this.orbit.update(); return; }
     const target = this.targetOpen ? 1 : 0;
     const next = THREE.MathUtils.damp(this.item.explosion, target, 5, dt);
-    this.item.setExplosion(Math.abs(next - target) < 0.001 ? target : next);
-    this.item.advance(dt, this.running);
+    this.item.setExplosion?.(Math.abs(next - target) < 0.001 ? target : next);
+    this.item.advance?.(dt, this.running);
     this.orbit.update();
   }
 
@@ -189,7 +197,7 @@ export class BenchEngineSession {
     this.abort?.abort();
     this.orbit?.dispose();
     this.highlight(null);
-    this.item.setExplosion(0);
+    this.item.setExplosion?.(0);
     this.borrowed.restore();
     this.panel.restoreCanvas();
     this.engine.clearActiveView(this);

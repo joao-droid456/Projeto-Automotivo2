@@ -8,6 +8,7 @@ export class InteractionSystem {
     camera.getWorldDirection(this.direction);
     if (active) for (const item of registry.items.values()) {
       if (item.available === false) continue;
+      if (!item.data.bothZones && Boolean(item.data.exterior) !== Boolean(this.engine.outdoor?.outside)) continue;
       const delta = this.delta.copy(item.anchor).sub(camera.position);
       const distance = delta.length();
       const alignment = delta.normalize().dot(this.direction);

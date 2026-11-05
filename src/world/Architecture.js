@@ -30,7 +30,13 @@ export function buildArchitecture(root, m, collision, config) {
   }
   if (previous < d / 2) box('alvenaria final das janelas', [0.22, wh, d / 2 - previous], [half, bottom + wh / 2, (d / 2 + previous) / 2], m.wall);
   for (const z of [-d / 2, d / 2]) {
-    if (z > 0) box('parede de empena', [w, eave, 0.22], [0, eave / 2, z], m.wall, true);
+    if (z > 0) {
+      const gate = r.gate;
+      const left = gate.x - gate.width / 2, right = gate.x + gate.width / 2;
+      box('parede à esquerda do portão', [left + half, eave, 0.22], [(left - half) / 2, eave / 2, z], m.wall, true);
+      box('parede à direita do portão', [half - right, eave, 0.22], [(right + half) / 2, eave / 2, z], m.wall, true);
+      box('parede sobre o portão', [gate.width, eave - gate.height, 0.22], [gate.x, (eave + gate.height) / 2, z], m.wall);
+    }
     else {
       // Janela do setor de motores no encontro com a parede branca dos quadros.
       box('parede norte inferior', [w, bottom, 0.22], [0, bottom / 2, z], m.wall, true);
@@ -52,9 +58,9 @@ export function buildArchitecture(root, m, collision, config) {
     const mesh = new THREE.Mesh(geometry, m.wall); mesh.position.z = z - 0.11; root.add(mesh);
   }
   const gate = r.gate;
-  box('portão de correr fechado', [gate.width, gate.height, 0.1], [gate.x, gate.height / 2, gate.z], m.gate);
-  for (let x = gate.x - gate.width / 2; x < gate.x + gate.width / 2; x += 0.075) repeat([0.016, gate.height, 0.025], [x, gate.height / 2, gate.z - 0.065], m.frame);
-  for (const y of [0.05, gate.height * 0.45, gate.height]) box('travessa do portão', [gate.width + 0.1, 0.07, 0.05], [gate.x, y, gate.z - 0.08], m.frame);
+  box('portão sólido fechado', [gate.width, gate.height, 0.24], [gate.x, gate.height / 2, d / 2], m.gate);
+  collision.addBox(gate.x, d / 2, gate.width, 0.3, 'portao-passagem');
+  for (let y = 0.1; y < gate.height; y += 0.25) repeat([gate.width, 0.035, 0.04], [gate.x, y, d / 2 - 0.14], m.frame);
   // Duas águas separadas pela faixa zenital: sem laje plana escondendo a estrutura.
   for (const side of [-1, 1]) {
     const centerX = side * (half + slot) / 2;

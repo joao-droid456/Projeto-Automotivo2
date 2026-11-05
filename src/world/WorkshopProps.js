@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { BenchEngine } from '../objects/BenchEngine.js';
+import { PartsDisplay } from '../objects/PartsDisplay.js';
 import { Vehicle } from '../objects/Vehicle.js';
 import { VehicleLift } from '../objects/VehicleLift.js';
 import { batchStaticWorld } from './StaticBatching.js';
@@ -6,6 +8,7 @@ import { batchStaticWorld } from './StaticBatching.js';
 export function buildWorkshopProps(root, kit, m, collision, config, coveredVehicles = []) {
   const { box, repeat, beam, pipe } = kit, r = config.reconstruction;
   const lifts = [];
+  root.userData.rearDisplays = [];
   const wheels = new THREE.CylinderGeometry(0.055, 0.055, 0.035, 10);
   const cylinderGeo = new THREE.CylinderGeometry(1, 1, 1, 20);
   function cylinder(name, radius, length, pos, material, axis = 'y') {
@@ -50,17 +53,11 @@ export function buildWorkshopProps(root, kit, m, collision, config, coveredVehic
     box('coluna de cavalete', [0.13, 0.88, 0.13], [x + 0.21, 0.62, z], standMaterial);
     beam('escora do cavalete', [x + 0.21, 0.2, z + 0.24], [x + 0.21, 0.72, z], 0.055, standMaterial);
     cylinder('cabeçote giratório do suporte', 0.09, 0.3, [x + 0.12, 1.08, z], standMaterial, 'x');
-    box('bloco de motor aproximado', [0.58, 0.37, 0.46], [x - 0.1, 1.12, z], m.dark);
-    box('cabeçote aproximado', [0.62, 0.16, 0.48], [x - 0.1, 1.38, z], m.metal);
-    box('tampa superior do conjunto', [0.6, 0.09, 0.31], [x - 0.1, 1.5, z], m.dark);
-    box('cárter aproximado', [0.47, 0.14, 0.37], [x - 0.1, 0.86, z], m.metal);
-    for (let j = 0; j < 5; j++) repeat([0.025, 0.3, 0.49], [x - 0.35 + j * 0.12, 1.15, z], m.sill);
-    for (let j = 0; j < 4; j++) {
-      pipe('curva de coletor', [[x - 0.32 + j * 0.14, 1.32, z + 0.2], [x - 0.32 + j * 0.14, 1.23, z + 0.36], [x - 0.32 + j * 0.14, 1.07, z + 0.38]], 0.025, m.metal);
-    }
-    cylinder('polia do conjunto', 0.13, 0.045, [x - 0.1, 1.07, z - 0.29], m.dark, 'z');
-    cylinder('polia auxiliar', 0.065, 0.05, [x + 0.12, 1.34, z - 0.29], m.metal, 'z');
-    cylinder('alternador aproximado', 0.08, 0.14, [x - 0.35, 1.03, z + 0.22], m.metal, 'z');
+    const motor = new BenchEngine({ position: [x - 0.1, 0, z], size: [1, 0.7, 1] });
+    motor.data.id = 'motor-fundo-' + (root.userData.rearDisplays.length + 1);
+    motor.data.name = 'Motor no cavalete · explorar componentes';
+    root.add(motor.group);
+    root.userData.rearDisplays.push(motor);
     collision.addBox(x, z, 0.98, 0.95, 'conjunto em suporte');
   }
   // Dois postos de elevação visíveis nas fotos 6/7. Apenas cenográficos.
@@ -117,10 +114,12 @@ export function buildWorkshopProps(root, kit, m, collision, config, coveredVehic
   // Prateleira verde e ventilador, confirmados em 1/11.
   const shelfX = -0.25, shelfZ = -14.42;
   for (const x of [shelfX - 0.7, shelfX + 0.7]) for (const z of [shelfZ - 0.22, shelfZ + 0.22]) repeat([0.035, 1.8, 0.035], [x, 0.92, z], m.green);
+  const storedParts = [];
   for (const y of [0.18, 0.7, 1.2, 1.75]) {
     box('prateleira verde', [1.45, 0.04, 0.53], [shelfX, y, shelfZ], m.green);
-    if (y < 1.7) for (let i = 0; i < 4; i++) cylinder('componente guardado aproximado', 0.09, 0.13, [shelfX - 0.5 + i * 0.32, y + 0.1, shelfZ], m.metal, 'z');
+    if (y < 1.7) for (let i = 0; i < 4; i++) storedParts.push(cylinder('componente guardado aproximado', 0.09, 0.13, [shelfX - 0.5 + i * 0.32, y + 0.1, shelfZ], m.metal, 'z'));
   }
+  root.userData.rearDisplays.push(new PartsDisplay(root, storedParts));
   collision.addBox(shelfX, shelfZ, 1.5, 0.6, 'estante verde');
   const fan = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.008, 6, 40), m.dark); fan.position.set(shelfX, 2.5, -14.7); root.add(fan);
   for (let i = 0; i < 12; i++) {

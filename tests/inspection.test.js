@@ -168,6 +168,7 @@ test('loop renderiza uma única cena e congela todas as atualizações da oficin
     scene: new THREE.Scene(),
     camera: new THREE.PerspectiveCamera(),
     controls: { update: () => updates.push('controls') },
+    outdoor: { outside: false, update() {} },
     world: {
       vehicle: { update: () => updates.push('vehicle') },
       lifts: [{ advance: () => updates.push('lift') }],

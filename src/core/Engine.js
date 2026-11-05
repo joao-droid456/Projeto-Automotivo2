@@ -7,6 +7,8 @@ import { GameLoop } from './GameLoop.js';
 import { createRenderer, applyRendererQuality } from '../graphics/Renderer.js';
 import { StaticReflections } from '../graphics/StaticReflections.js';
 import { disposeObject3D } from '../utils/DisposeUtils.js';
+import { Outdoor } from '../world/Outdoor.js';
+import { GatePassage } from '../objects/GatePassage.js';
 
 export class Engine {
   constructor(container, config, settings, onPause) {
@@ -24,6 +26,11 @@ export class Engine {
       this.registry = new EquipmentRegistry(this.scene, this.world.materials, this.collision);
       this.controls = new Controls(this.camera, this.renderer.domElement, this.collision, config, onPause);
       this.controls.reset();
+      this.outdoor = new Outdoor(this);
+      this.registry.attach(this.outdoor.item);
+      this.outdoor.group.add(this.outdoor.item.outline);
+      this.gate = new GatePassage(this);
+      this.registry.attach(this.gate);
       this.applySettings(settings);
       this.resize = () => {
         const w = container.clientWidth, h = container.clientHeight;
@@ -67,13 +74,16 @@ export class Engine {
         return;
       }
       this.controls.update(dt);
-      this.world.vehicle.update(dt);
-      for (const lift of this.world.lifts) lift.advance(dt);
-      for (const item of this.registry.items.values()) item.update(seconds);
+      this.outdoor.update(dt);
+      if (!this.outdoor.outside) {
+        this.world.vehicle.update(dt);
+        for (const lift of this.world.lifts) lift.advance(dt);
+        for (const item of this.registry.items.values()) item.update(seconds);
+      }
       this.onFrame(dt);
     }, () => {
       const view = this.activeView || this;
-      this.renderer.render(view.scene, view.camera);
+      this.renderer.render(!this.activeView && this.outdoor.outside ? this.outdoor.scene : view.scene, view.camera);
     });
     this.loop.start();
   }
@@ -128,6 +138,7 @@ export class Engine {
     this.controls?.dispose(); window.removeEventListener('resize', this.resize);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     disposeObject3D(this.scene);
+    if (this.outdoor) { disposeObject3D(this.outdoor.scene); this.outdoor.scene.clear(); }
     this.scene.clear();
     this.renderer.dispose(); this.renderer.domElement.remove();
   }
