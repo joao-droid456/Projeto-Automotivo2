@@ -1,3 +1,4 @@
+
 name: Deploy Projeto Automotivo
 
 on:
@@ -45,8 +46,11 @@ jobs:
       - name: Enviar arquivos gerados
         uses: actions/upload-pages-artifact@v3
         with:
+          name: pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: ./dist
 
       - name: Publicar
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: pages-${{ github.run_id }}-${{ github.run_attempt }}
