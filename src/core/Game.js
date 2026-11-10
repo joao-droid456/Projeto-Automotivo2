@@ -16,6 +16,7 @@ import { InspectionSession } from '../systems/InspectionSession.js';
 import { InspectionPanel } from '../ui/InspectionPanel.js';
 import { BenchEngine } from '../objects/BenchEngine.js';
 import { BenchEngineSession } from '../systems/BenchEngineSession.js';
+import { Race, RACE_LAPS } from '../world/Race.js';
 import '../ui/oil-change.css';
 import '../ui/inspection.css';
 
@@ -37,6 +38,8 @@ export function createGame(root) {
     inspection,
     benchEngine,
     vehicleSelection,
+    hostSelection,
+    race,
     state = 'loading',
     mode = 'free',
     returnState = 'home',
@@ -83,6 +86,7 @@ export function createGame(root) {
     }
   }
   function home() {
+    leaveRace();
     engine?.outdoor?.exitCar();
     panel?.close();
     ui.closeModal();
@@ -94,6 +98,7 @@ export function createGame(root) {
     ui.$('enter').focus();
   }
   function enter(selectedMode = mode) {
+    leaveRace();
     engine.outdoor.exitCar();
     mode = selectedMode;
     guideStep = 0;
@@ -117,6 +122,19 @@ export function createGame(root) {
     showPause(message);
   }
   function showPause(message) {
+    if (race) {
+      ui.modal(
+        'Corrida pausada',
+        '<div class="button-stack"><button id="race-resume" class="primary">Retomar corrida</button><button id="race-restart">Reiniciar corrida</button><button id="race-leave">Voltar ao Samuel</button></div>',
+      );
+      ui.bind('race-resume', resume);
+      ui.bind('race-restart', startRace);
+      ui.bind('race-leave', () => {
+        leaveRace();
+        resume();
+      });
+      return;
+    }
     ui.modal(
       'Uma pausa na oficina',
       `<p>${message || 'Seu ponto no ambiente foi mantido.'}</p><div class="button-stack"><button id="resume" class="primary">Retomar exploração →</button><button id="pause-settings">Configurações</button><button id="reset-position">Voltar ao ponto inicial</button><button id="back-home">Tela inicial</button></div>`,
@@ -225,12 +243,17 @@ export function createGame(root) {
     }
   }
   function openEquipment() {
+    if (race) return;
     if (state === 'playing' && engine.outdoor.driving) {
       if (!engine.outdoor.exitCar()) ui.toast('Mova o carro para um local com espaço para sair.');
       return;
     }
     if (state !== 'playing' || !interaction.current) return;
     const item = interaction.current;
+    if (item.data.type === 'race-host') {
+      inviteRace();
+      return;
+    }
     if (item.data.type === 'gate') {
       interaction.update(false);
       if (!engine.gate.cross()) ui.toast('Aproxime-se do portão e deixe a passagem livre.');
@@ -276,6 +299,99 @@ export function createGame(root) {
     audio.play();
   }
 
+  function inviteRace() {
+    if (state !== 'playing' || race || engine.outdoor.driving) return;
+    interaction.update(false);
+    setState('race-invite');
+    ui.modal(
+      'Samuel',
+      '<p>Você gostaria de participar de uma corrida?</p><p>Duas voltas em outro circuito contra quatro adversários.</p><div class="button-stack"><button id="race-yes" class="primary">Sim, vamos correr!</button><button id="race-no">Não, agora não</button></div>',
+    );
+    ui.bind('race-yes', startRace);
+    ui.bind('race-no', resume);
+  }
+
+  function leaveRace() {
+    if (!race) return;
+    engine.clearActiveView(race);
+    race.dispose();
+    race = null;
+    engine.controls.driving = false;
+    engine.outdoor.scene.visible = true;
+    engine.controls.clear();
+    ui.$('race-status')?.remove();
+    ui.$('race-brake')?.remove();
+    ui.$('race-reset')?.remove();
+    updateObjective();
+    engine.resize();
+  }
+
+  function startRace() {
+    leaveRace();
+    ui.closeModal();
+    interaction.update(false);
+    const status = document.createElement('div');
+    status.id = 'race-status';
+    status.className = 'objective';
+    status.style.cssText = 'white-space:pre-line;pointer-events:none';
+    ui.$('hud').append(status);
+    race = new Race(
+      engine,
+      result => {
+        setState('race-result');
+        ui.modal(
+          'Bandeirada!',
+          `<p>Você terminou em <strong>${result.position}º de 5</strong>.</p><p>Tempo: ${result.time.toFixed(1)} s</p><div class="button-stack"><button id="race-again" class="primary">Correr novamente</button><button id="race-return">Voltar ao Samuel</button></div>`,
+        );
+        ui.bind('race-again', startRace);
+        ui.bind('race-return', () => {
+          leaveRace();
+          resume();
+        });
+      },
+      current => {
+        status.textContent =
+          current.countdown > 0
+            ? `PREPARE-SE · ${Math.ceil(current.countdown)}`
+            : `${current.position}º / 5 · VOLTA ${Math.min(RACE_LAPS, Math.floor(Math.max(0, current.player.progress)) + 1)} / ${RACE_LAPS}\n${Math.round(Math.abs(current.player.speed) * 3.6)} km/h · ${current.elapsed.toFixed(1)} s\nW/S acelerar / frear · A/D virar · Espaço drift · R reposicionar`;
+      },
+    );
+    engine.scene.visible = false;
+    engine.outdoor.scene.visible = false;
+    engine.controls.driving = true;
+    engine.setActiveView(race);
+    setState('playing');
+    ui.show('objective', false);
+    ui.show('interact', false);
+    ui.$('mode-label').textContent = 'CORRIDA · CIRCUITO SAMUEL';
+    const brake = document.createElement('button');
+    brake.id = 'race-brake';
+    brake.textContent = 'Freio de mão';
+    brake.style.cssText = 'position:absolute;right:24px;bottom:145px;pointer-events:auto;touch-action:none';
+    brake.onpointerdown = e => {
+      if (!engine.controls.active) return;
+      e.preventDefault();
+      brake.setPointerCapture(e.pointerId);
+      engine.controls.keys.add('Space');
+    };
+    brake.onpointerup =
+      brake.onpointercancel =
+      brake.onlostpointercapture =
+        () => engine.controls.keys.delete('Space');
+    ui.$('hud').append(brake);
+    const reset = document.createElement('button');
+    reset.id = 'race-reset';
+    reset.textContent = 'Reposicionar';
+    reset.style.cssText = 'position:absolute;right:24px;bottom:200px;pointer-events:auto';
+    reset.onclick = () => {
+      const a = race.player.angle;
+      race.player.car.group.position.set(Math.sin(a) * 70, 0, Math.cos(a) * 70);
+      Object.assign(race.player, { speed: 0, lateralSpeed: 0, steering: 0, heading: a - Math.PI / 2 });
+    };
+    ui.$('hud').append(reset);
+    engine.controls.start();
+  }
+
   async function boot() {
     if (disposed || started) throw new Error('Esta aplicação já foi iniciada ou encerrada.');
     started = true;
@@ -293,6 +409,18 @@ export function createGame(root) {
       audio.enabled = progress.data.settings.audio;
       resetTouch = bindTouchControls(ui, engine.controls);
       interaction = new InteractionSystem(engine);
+      hostSelection = new VehicleSelection(
+        engine,
+        [{ id: 'samuel', root: engine.raceHost.group }],
+        inviteRace,
+        () =>
+          state === 'playing' &&
+          !race &&
+          engine.outdoor.outside &&
+          !engine.outdoor.driving &&
+          engine.camera.position.distanceTo(engine.raceHost.anchor) < config.interactionDistance,
+        [engine.renderer.domElement, ui.$('look-zone')],
+      );
       panel = new EquipmentPanel(
         ui,
         progress,
@@ -400,6 +528,10 @@ export function createGame(root) {
         e => {
           if (e.code === 'KeyE' && !e.repeat && state === 'playing') openEquipment();
           if (e.code === 'Escape') {
+            if (state === 'race-invite') {
+              resume();
+              return;
+            }
             if (state === 'engine-inspection') benchEngine.close();
             else if (state === 'inspection') inspection.close();
             else if (state === 'vehicle-choice') resume();
@@ -443,6 +575,7 @@ export function createGame(root) {
     abort.abort();
     resetTouch.dispose?.();
     vehicleSelection?.dispose();
+    hostSelection?.dispose();
     benchEngine?.dispose();
     inspection?.dispose();
     interaction?.update(false);

@@ -18,7 +18,7 @@ export class Controls {
     const options = { signal: this.abort.signal };
     document.addEventListener('keydown', e => {
       if (!this.active || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space'].includes(e.code)) {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space'].includes(e.code)) {
         this.keys.add(e.code); e.preventDefault();
       }
     }, options);

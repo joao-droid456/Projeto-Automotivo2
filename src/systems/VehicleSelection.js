@@ -74,7 +74,8 @@ export class VehicleSelection {
   }
 
   pick(clientX, clientY) {
-    const { renderer, camera, scene } = this.engine;
+    const { renderer, camera } = this.engine;
+    const scene = this.engine.outdoor?.outside ? this.engine.outdoor.scene : this.engine.scene;
     if (document.pointerLockElement === renderer.domElement) this.pointer.set(0, 0);
     else {
       const rect = renderer.domElement.getBoundingClientRect();

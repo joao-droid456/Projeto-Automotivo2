@@ -9,6 +9,7 @@ import { StaticReflections } from '../graphics/StaticReflections.js';
 import { disposeObject3D } from '../utils/DisposeUtils.js';
 import { Outdoor } from '../world/Outdoor.js';
 import { GatePassage } from '../objects/GatePassage.js';
+import { RaceHost } from '../objects/RaceHost.js';
 
 export class Engine {
   constructor(container, config, settings, onPause) {
@@ -29,6 +30,10 @@ export class Engine {
       this.outdoor = new Outdoor(this);
       this.registry.attach(this.outdoor.item);
       this.outdoor.group.add(this.outdoor.item.outline);
+      const portrait = new THREE.TextureLoader().load(new URL('../../imagem-samuel/1000022476.jpeg', import.meta.url).href);
+      this.raceHost = new RaceHost(this, portrait);
+      this.registry.attach(this.raceHost);
+      this.outdoor.group.add(this.raceHost.outline);
       this.gate = new GatePassage(this);
       this.registry.attach(this.gate);
       this.applySettings(settings);
