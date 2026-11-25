@@ -111,12 +111,14 @@ export class Vehicle {
     this.hood.userData.inspectionPart = 'hood';
     round([1.09, 0.12, 1.64], orange, [-0.51, -0.01, 0], this.hood, 0.035);
     if (displayOnly) {
+      this.wheels = [];
       for (const x of [-1.24, 1.21]) for (const side of [-1, 1]) {
         const wheel = createWheel(true);
         wheel.userData.inspectionPart = `${x < 0 ? 'front' : 'rear'}-wheel-${side > 0 ? 'left' : 'right'}`;
         wheel.position.set(x, 0.4, side * 0.84);
         if (side < 0) wheel.rotation.y = Math.PI;
         this.group.add(wheel);
+        this.wheels.push(wheel);
       }
       this.group.traverse(o => {
         if (!o.isMesh) return;

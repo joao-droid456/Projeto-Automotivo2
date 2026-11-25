@@ -15,6 +15,13 @@
   "runSpeed": 4.5,
   "interactionDistance": 3.2,
   "notes": "Topologia inferida por correspondências nas 16 fotografias. Medidas de trabalho estimadas; sem levantamento métrico. A ligação entre fachadas dos setores permanece uma hipótese.",
+  "driving": {
+    "spawn": [
+      -7.4,
+      22
+    ],
+    "heading": 1.5708
+  },
   "reconstruction": {
     "ridgeHeight": 7.7,
     "skylightWidth": 1.45,

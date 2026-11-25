@@ -18,6 +18,10 @@ import { BenchEngine } from '../objects/BenchEngine.js';
 import { BenchEngineSession } from '../systems/BenchEngineSession.js';
 import '../ui/oil-change.css';
 import '../ui/inspection.css';
+import '../ui/driving.css';
+
+const FOOT_HINT = 'W A S D · mover   Mouse · olhar   E · interagir   ESC · pausar';
+const DRIVE_HINT = 'W/S · acelerar   A/D · virar   ESPAÇO · freio de mão   E · sair do carro';
 
 export function createGame(root) {
   const abort = new AbortController();
@@ -42,6 +46,10 @@ export function createGame(root) {
     returnState = 'home',
     guideStep = 0;
   let resetTouch = () => {};
+  const setHint = text => {
+    const hint = root.querySelector('.desktop-hint');
+    if (hint) hint.textContent = text;
+  };
   const modeNames = {
     free: 'EXPLORAÇÃO LIVRE',
     guided: 'VISITA GUIADA',
@@ -57,7 +65,7 @@ export function createGame(root) {
   }
   function updateObjective() {
     const objective = ui.$('objective');
-    ui.$('mode-label').textContent = modeNames[mode];
+    ui.$('mode-label').textContent = engine?.driving?.active ? 'PISTA DE TESTES' : modeNames[mode];
     objective.classList.toggle('hidden', mode === 'free');
     const visited = progress.data.visited.includes('bancada-demo');
     const done = Boolean(progress.data.completed['preparar-bancada']);
@@ -78,8 +86,13 @@ export function createGame(root) {
     document.body.classList.toggle('at-home', next === 'home');
     if (next !== 'playing') {
       engine?.controls.stop();
+      engine?.driving?.releaseInputs();
       resetTouch();
       ui.show('interact', false);
+      if (next === 'home') {
+        engine?.driving?.cancel();
+        setHint(FOOT_HINT);
+      }
     }
   }
   function home() {
@@ -97,7 +110,9 @@ export function createGame(root) {
     guideStep = 0;
     panel.close();
     ui.closeModal();
+    engine.driving?.cancel();
     engine.controls.reset();
+    setHint(FOOT_HINT);
     ui.$('objective').textContent = '';
     updateObjective();
     setState('playing');
@@ -122,6 +137,9 @@ export function createGame(root) {
     ui.bind('resume', resume);
     ui.bind('pause-settings', () => showSettings('paused'));
     ui.bind('reset-position', () => {
+      engine.driving?.cancel();
+      setHint(FOOT_HINT);
+      ui.$('mode-label').textContent = modeNames[mode];
       engine.controls.reset();
       resume();
     });
@@ -202,6 +220,8 @@ export function createGame(root) {
   function startAssembly() {
     if (state === 'assembly') return;
     if (state === 'home' || state === 'activities') engine.controls.reset();
+    engine.driving?.cancel();
+    setHint(FOOT_HINT);
     panel.close();
     ui.closeModal();
     setState('assembly');
@@ -221,8 +241,36 @@ export function createGame(root) {
       showPause();
     }
   }
+  function enterCar() {
+    if (state !== 'playing' || !engine?.driving) return;
+    if (!engine.driving.enter()) {
+      ui.toast('Aproxime-se do carro de testes para dirigir.');
+      return;
+    }
+    interaction.update(false);
+    ui.updateInteraction(null, false);
+    ui.show('objective', false);
+    ui.$('mode-label').textContent = 'PISTA DE TESTES';
+    setHint(DRIVE_HINT);
+    audio.play();
+  }
+  function leaveCar() {
+    if (!engine?.driving?.exit()) return;
+    ui.$('mode-label').textContent = modeNames[mode];
+    updateObjective();
+    setHint(FOOT_HINT);
+  }
   function openEquipment() {
-    if (state !== 'playing' || !interaction.current) return;
+    if (state !== 'playing') return;
+    if (engine.driving?.active) {
+      leaveCar();
+      return;
+    }
+    if (!interaction.current && engine.driving?.isNearby()) {
+      enterCar();
+      return;
+    }
+    if (!interaction.current) return;
     const item = interaction.current;
     if (item.data.type === 'bench-engine') {
       setState('engine-inspection');
@@ -300,7 +348,7 @@ export function createGame(root) {
           position: [bench.data.position[0] - 0.35, 0, bench.data.position[2]],
           size: [2.8, top.position.y + top.scale.y / 2 - 0.055, 1.1],
         });
-        engine.world.root.add(motor.group);
+        engine.world.interior.add(motor.group);
         engine.world.benchEngine = motor;
         engine.registry.attach(motor);
       }
@@ -348,11 +396,19 @@ export function createGame(root) {
             benchEngine.open(engine.world.benchEngine);
           } else chooseVehicle(vehicle);
         },
-        () => state === 'playing',
+        () => state === 'playing' && !engine.driving?.active,
         [engine.renderer.domElement, ui.$('look-zone')],
       );
-      root.querySelector('.desktop-hint').textContent =
-        'W A S D · mover   Mouse · olhar   Clique no carro · inspecionar';
+      setHint(FOOT_HINT);
+      const brakeButton = ui.$('touch-brake');
+      const setBrake = value => event => {
+        if (event.cancelable) event.preventDefault();
+        engine.driving.touchHandbrake = value;
+      };
+      brakeButton.addEventListener('pointerdown', setBrake(true), { signal: abort.signal });
+      for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+        brakeButton.addEventListener(type, setBrake(false), { signal: abort.signal });
+      }
       ui.bind('enter', () => enter('free'));
       ui.bind('how', () => showHelp('home'));
       ui.bind('activities', showActivities);
@@ -395,8 +451,14 @@ export function createGame(root) {
       engine.start(dt => {
         assembly.update(dt);
         oilChange.update(dt);
-        const target = interaction.update(state === 'playing');
-        ui.updateInteraction(target, state === 'playing');
+        const driving = Boolean(engine.driving?.active);
+        const canPlay = state === 'playing';
+        let target = interaction.update(canPlay && !driving);
+        if (!target && canPlay && !driving && engine.driving?.isNearby()) {
+          target = { data: { name: 'Carro de testes' }, actionLabel: 'Dirigir na pista · E' };
+        }
+        ui.updateInteraction(target, canPlay && !driving);
+        ui.updateDrive(engine.driving);
       });
       ui.show('loading', false);
       home();

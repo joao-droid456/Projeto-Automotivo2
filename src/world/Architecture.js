@@ -29,9 +29,16 @@ export function buildArchitecture(root, m, collision, config) {
     previous = z + width / 2;
   }
   if (previous < d / 2) box('alvenaria final das janelas', [0.22, wh, d / 2 - previous], [half, bottom + wh / 2, (d / 2 + previous) / 2], m.wall);
+  const gate = r.gate;
   for (const z of [-d / 2, d / 2]) {
-    if (z > 0) box('parede de empena', [w, eave, 0.22], [0, eave / 2, z], m.wall, true);
-    else {
+    if (z > 0) {
+      // Vão de saída para o pátio; a verga mantém a empena contínua.
+      const leftEdge = gate.x - gate.width / 2, rightEdge = gate.x + gate.width / 2;
+      const leftWidth = leftEdge + half, rightWidth = half - rightEdge;
+      if (leftWidth > 0.02) box('parede de empena oeste', [leftWidth, eave, 0.22], [(-half + leftEdge) / 2, eave / 2, z], m.wall, true);
+      if (rightWidth > 0.02) box('parede de empena leste', [rightWidth, eave, 0.22], [(rightEdge + half) / 2, eave / 2, z], m.wall, true);
+      box('verga do portão de saída', [gate.width, eave - gate.height, 0.22], [gate.x, (eave + gate.height) / 2, z], m.wall);
+    } else {
       // Janela do setor de motores no encontro com a parede branca dos quadros.
       box('parede norte inferior', [w, bottom, 0.22], [0, bottom / 2, z], m.wall, true);
       box('parede norte superior', [w, eave - top, 0.22], [0, (eave + top) / 2, z], m.wall);
@@ -51,10 +58,14 @@ export function buildArchitecture(root, m, collision, config) {
     const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.22, bevelEnabled: false });
     const mesh = new THREE.Mesh(geometry, m.wall); mesh.position.z = z - 0.11; root.add(mesh);
   }
-  const gate = r.gate;
-  box('portão de correr fechado', [gate.width, gate.height, 0.1], [gate.x, gate.height / 2, gate.z], m.gate);
-  for (let x = gate.x - gate.width / 2; x < gate.x + gate.width / 2; x += 0.075) repeat([0.016, gate.height, 0.025], [x, gate.height / 2, gate.z - 0.065], m.frame);
-  for (const y of [0.05, gate.height * 0.45, gate.height]) box('travessa do portão', [gate.width + 0.1, 0.07, 0.05], [gate.x, y, gate.z - 0.08], m.frame);
+  // Portão de correr recolhido sobre a parede: o vão fica livre para o carro.
+  const openX = gate.x + gate.width + 0.12;
+  box('portão de correr aberto', [gate.width, gate.height, 0.1], [openX, gate.height / 2, gate.z], m.gate);
+  for (let x = openX - gate.width / 2; x < openX + gate.width / 2; x += 0.075) repeat([0.016, gate.height, 0.025], [x, gate.height / 2, gate.z - 0.065], m.frame);
+  for (const y of [0.05, gate.height * 0.45, gate.height]) box('travessa do portão', [gate.width + 0.1, 0.07, 0.05], [openX, y, gate.z - 0.08], m.frame);
+  box('trilho superior do portão', [gate.width * 2.1, 0.07, 0.12], [gate.x + gate.width * 0.55, gate.height + 0.14, gate.z + 0.02], m.steel);
+  box('batente do portão', [0.14, gate.height + 0.2, 0.16], [gate.x - gate.width / 2 - 0.05, (gate.height + 0.2) / 2, gate.z + 0.02], m.steel);
+  for (const dx of [0.4, gate.width + 0.2]) box('roldana do portão', [0.12, 0.12, 0.12], [gate.x + dx, gate.height + 0.04, gate.z + 0.02], m.metal);
   // Duas águas separadas pela faixa zenital: sem laje plana escondendo a estrutura.
   for (const side of [-1, 1]) {
     const centerX = side * (half + slot) / 2;

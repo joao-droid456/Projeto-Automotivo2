@@ -17,6 +17,10 @@ flowchart TD
   Engine --> Player[Controls / CollisionSystem]
   Engine --> EquipmentRegistry
   Engine --> VehicleFleet
+  Engine --> Outdoor[OutdoorArea / pátio]
+  Engine --> Driving[DrivingSystem / VehicleMotion]
+  Engine --> Zones[AreaZones]
+  Driving --> DrivableCar
   Workshop --> Objects[Vehicle / VehicleLift / equipamentos]
   Objects --> LiftMotion
   Sessions --> Rules[education: regras puras]
@@ -36,6 +40,10 @@ flowchart TD
 | Renderer | Cria/configura WebGLRenderer; DPR 1/1,5/2 limitado ao aparelho. |
 | StaticReflections | Captura única do cenário em média/alta; possui e descarta o render target. |
 | Workshop e construtores | Geometria, luzes, materiais, implantação, batching e instanciamento. |
+| OutdoorArea | Pista, zebras, área verde, cerca, horizonte e carro de testes; devolve `root`, `backdrop`, luzes próprias e `layout`. |
+| AreaZones | Regras puras de área (`inside`/`outside`/`both`) a partir da câmera e do foco, com faixa do portão. |
+| VehicleMotion | Estado veicular sem Three.js: curva de potência progressiva (teto de 150 km/h), ré, arrasto, aderência, freio de mão e derrapagem. |
+| DrivingSystem | Entrada/saída do carro, câmera de perseguição, colisão, marcas de pneu e HUD de velocidade. |
 | Controls | Primeira pessoa, pointer lock, teclado/mouse, velocidade e pausa por perda de foco. |
 | CollisionSystem | Círculo horizontal contra AABB, subdivisão e deslizamento; não simula física veicular. |
 | LiftMotion | Estado temporal sem DOM/Three.js; quatro segundos com interpolação quintic. |
@@ -55,6 +63,12 @@ index.html importa main.js, que cria Game. start carrega quatro JSON em paralelo
 Ordem por frame: controles, veículo didático, elevadores, objetos registrados, sessões, seleção/HUD e renderização. Página oculta não atualiza/renderiza; o tempo é rebaseado sem acumular salto. Repetir start não instala callbacks concorrentes. Comparação usa a mesma fachada e OrbitControls.
 
 Estados: loading, home, playing, paused, panel, help, settings, activities, assembly e oil-change. Pausa interrompe movimento e libera pointer lock; retomar exige gesto do usuário. Regras educativas permanecem nos modelos, sem dependência do renderer.
+
+## Pátio, pista e recorte por área
+
+`Engine` monta o `Workshop` (dividido em `shell`, `interior` e `exterior`) e o `OutdoorArea` (pátio em `root` e horizonte em `backdrop`). `AreaZones.resolveWorkshopArea` combina a posição da câmera com o foco — a câmera em primeira pessoa ou o carro quando dirigindo — e devolve `inside`, `outside` ou `both`; `both` vale na faixa do portão para permitir atravessá-lo sem cortes bruscos. `Engine.applyArea` alterna visibilidade de interior/exterior/pátio, frota e conjunto de luzes (interna versus solar), enquanto `applyAtmosphere` troca fundo, neblina e `camera.far` conforme a câmera esteja dentro ou fora: no pátio usa `FogExp2` densa (0,03) com céu da mesma cor, criando a visibilidade curta estilo Silent Hill; no interior a densidade cai para 0,012, uma bruma leve que não atrapalha as práticas. Ambos os recortes são pré-compilados no `start` para evitar engasgo na primeira troca.
+
+`DrivingSystem` usa `VehicleMotion` (posição, velocidade lateral/longitudinal, esterço). A potência cai com o quadrado da velocidade, dando a progressão de marchas de um arcade: 0 a 100 km/h leva cerca de 7,7 s e o teto é 150 km/h. `DrivableCar` reaproveita o veículo didático da oficina (`Vehicle` em modo `displayOnly`), reorientado para +Z e com as rodas separadas antes do batching, para girar e esterçar sem perder os lotes do restante da carroceria. A entrada exige proximidade; dirigindo, os controles de caminhada são suspensos, a câmera vira perseguição e a caixa do jogador é desativada. A saída procura um ponto livre ao lado do carro e restaura a câmera em primeira pessoa. A colisão usa círculo contra os AABBs do pátio com raio maior. `SkidMarks` recicla instâncias para não crescer em memória. Posição e rumo iniciais vêm de `workshop.json.driving`; o layout da pista e a vegetação são derivados das dimensões da oficina.
 
 ## Propriedade e encerramento
 

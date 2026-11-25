@@ -13,20 +13,20 @@ export class CollisionSystem {
     return box;
   }
 
-  blocked(x, z) {
+  blocked(x, z, radius = this.radius) {
     return this.boxes.some((b) => {
       if (b.enabled === false) return false;
       const dx = x - Math.max(b.minX, Math.min(x, b.maxX));
       const dz = z - Math.max(b.minZ, Math.min(z, b.maxZ));
-      return dx * dx + dz * dz < this.radius * this.radius;
+      return dx * dx + dz * dz < radius * radius;
     });
   }
 
-  move(position, dx, dz) {
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (this.radius * 0.45)));
+  move(position, dx, dz, radius = this.radius) {
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (radius * 0.45)));
     for (let i = 0; i < steps; i++) {
-      if (!this.blocked(position.x + dx / steps, position.z)) position.x += dx / steps;
-      if (!this.blocked(position.x, position.z + dz / steps)) position.z += dz / steps;
+      if (!this.blocked(position.x + dx / steps, position.z, radius)) position.x += dx / steps;
+      if (!this.blocked(position.x, position.z + dz / steps, radius)) position.z += dz / steps;
     }
   }
 

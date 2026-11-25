@@ -33,5 +33,5 @@ export function geometryKit(root, collision) {
     }
     batches.clear();
   }
-  return { box, repeat, beam, pipe, flush };
+  return { root, box, repeat, beam, pipe, flush };
 }

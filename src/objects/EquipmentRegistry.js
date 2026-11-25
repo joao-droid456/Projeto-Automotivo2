@@ -2,8 +2,8 @@ import { Equipment } from './Equipment.js';
 import { disposeObject3D } from '../utils/DisposeUtils.js';
 
 export class EquipmentRegistry {
-  constructor(scene, materials, collision) {
-    Object.assign(this, { scene, materials, collision });
+  constructor(scene, materials, collision, container = scene) {
+    Object.assign(this, { scene, materials, collision, container });
     this.items = new Map(); this.loader = null; this.disposed = false;
   }
   async register(data, onError = () => {}) {
@@ -11,7 +11,7 @@ export class EquipmentRegistry {
     if (this.items.has(data.id)) throw new Error(`Identificador duplicado: ${data.id}`);
     const item = new Equipment(data, this.materials, this.collision);
     this.items.set(data.id, item);
-    this.scene.add(item.group, item.outline, item.componentOutline);
+    this.container.add(item.group, item.outline, item.componentOutline);
     if (data.model) {
       try {
         // Carrega o parser somente quando existir um modelo GLB cadastrado.
@@ -43,8 +43,8 @@ export class EquipmentRegistry {
     }
     if (this.items.has(item.data.id)) throw new Error(`Identificador duplicado: ${item.data.id}`);
     this.items.set(item.data.id, item);
-    this.scene.add(item.outline);
-    if (item.componentOutline) this.scene.add(item.componentOutline);
+    this.container.add(item.outline);
+    if (item.componentOutline) this.container.add(item.componentOutline);
   }
   assertActive() { if (this.disposed) throw new Error('Registro de equipamentos já encerrado.'); }
   disposeModel(root) { disposeObject3D(root); }

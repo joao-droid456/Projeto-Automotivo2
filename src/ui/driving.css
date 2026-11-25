@@ -1,0 +1,7 @@
+#drive-hud{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px;padding:10px 16px;background:#15212bf0;box-shadow:0 8px 30px #0003;border-left:2px solid #df7160;z-index:3;pointer-events:none}
+#drive-hud .drive-readout{display:flex;align-items:baseline;gap:6px}
+#drive-hud strong{font-size:26px;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+#drive-hud small{color:#b8c5cd;font-size:9px;letter-spacing:1px}
+#drive-gear{min-width:26px;text-align:center;border:1px solid #ffffff33;border-radius:4px;padding:4px 6px;font-size:12px}
+#touch-brake{display:none;pointer-events:auto;padding:10px 16px;font-size:10px;letter-spacing:1px;touch-action:none}
+@media(pointer:coarse){#drive-hud{bottom:212px}#touch-brake{display:block}}

@@ -17,6 +17,7 @@ export class AppUI {
         <header class="hud-top"><div class="area-tag"><span class="red-dot"></span><div>OFICINA AUTOMOTIVA<small>Referências reais · medidas estimadas</small></div></div><div class="hud-actions"><button id="help" aria-label="Ajuda">?</button><button id="fullscreen" aria-label="Alternar tela cheia">⛶</button><button id="pause" aria-label="Pausar">Ⅱ</button></div></header>
         <div id="objective" class="objective"></div><div class="crosshair" aria-hidden="true"></div>
         <button id="interact" class="interact hidden"><span class="key">E</span><span><strong id="target-name"></strong><small id="target-action">Conhecer equipamento · demonstração</small></span></button>
+        <div id="drive-hud" class="hidden" aria-live="off"><span class="drive-readout"><strong id="drive-speed">0</strong><small>km/h</small></span><span id="drive-gear">N</span><button id="touch-brake" aria-label="Freio de mão">FREIO DE MÃO</button></div>
         <div class="hud-bottom"><span id="mode-label">EXPLORAÇÃO LIVRE</span><span class="desktop-hint">W A S D · mover &nbsp; Mouse · olhar &nbsp; ESC · pausar</span><span id="progress-label"></span></div>
         <div id="mobile-controls"><div id="look-zone" aria-label="Arraste para olhar"></div><div id="joystick" aria-label="Joystick de movimento"><div id="stick"></div></div><span class="touch-tip">Arraste à direita para olhar</span></div>
       </div>
@@ -45,6 +46,24 @@ export class AppUI {
     const label = target.actionLabel || 'Conhecer equipamento · demonstração';
     if (name.textContent !== target.data.name) name.textContent = target.data.name;
     if (action.textContent !== label) action.textContent = label;
+  }
+  updateDrive(driving) {
+    const active = Boolean(driving?.active);
+    if (this.driveVisible !== active) {
+      this.driveVisible = active;
+      this.show('drive-hud', active);
+    }
+    if (!active) return;
+    const speed = Math.round(Math.abs(driving.motion.speedKmh));
+    const gear = driving.motion.gear;
+    if (this.driveSpeed !== speed) {
+      this.driveSpeed = speed;
+      this.$('drive-speed').textContent = String(speed).padStart(3, '0');
+    }
+    if (this.driveGear !== gear) {
+      this.driveGear = gear;
+      this.$('drive-gear').textContent = gear;
+    }
   }
   bind(id, fn) { this.$(id).addEventListener('click', fn, { signal: this.abort.signal }); }
   dispose() { clearTimeout(this.toastTimer); this.abort.abort(); }
