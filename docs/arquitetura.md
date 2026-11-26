@@ -9,7 +9,7 @@ flowchart TD
   main[main.js] --> Game
   Game --> Engine
   Game --> UI[AppUI / EquipmentPanel / TouchControls]
-  Game --> Sessions[AssemblySession / OilChangeSession]
+  Game --> Sessions[InspectionSession / OilChangeSession]
   Game --> InteractionSystem
   Engine --> GameLoop
   Engine --> Graphics[Renderer / StaticReflections]
@@ -70,6 +70,8 @@ Estados: loading, home, playing, paused, panel, help, settings, activities, asse
 
 `DrivingSystem` usa `VehicleMotion` (posição, velocidade lateral/longitudinal, esterço). A potência cai com o quadrado da velocidade, dando a progressão de marchas de um arcade: 0 a 100 km/h leva cerca de 7,7 s e o teto é 150 km/h. `DrivableCar` reaproveita o veículo didático da oficina (`Vehicle` em modo `displayOnly`), reorientado para +Z e com as rodas separadas antes do batching, para girar e esterçar sem perder os lotes do restante da carroceria. A entrada exige proximidade; dirigindo, os controles de caminhada são suspensos, a câmera vira perseguição e a caixa do jogador é desativada. A saída procura um ponto livre ao lado do carro e restaura a câmera em primeira pessoa. A colisão usa círculo contra os AABBs do pátio com raio maior. `SkidMarks` recicla instâncias para não crescer em memória. Posição e rumo iniciais vêm de `workshop.json.driving`; o layout da pista e a vegetação são derivados das dimensões da oficina.
 
+**Danos e reparo:** a cada quadro, o deslocamento é testado por uma sonda descartável no `CollisionSystem`; se o carro for bloqueado com velocidade acima de 25 km/h, `DrivingSystem.crash` acumula dano (0 a 1) e `DrivableCar.addDent` posiciona um amassado do pool de 18 esferas achatadas contra o painel atingido, na cor escurecida da pintura, com tremor de câmera e `VehicleMotion.maxSpeed` reduzido a 55 km/h quando o dano é grave. Os amassados persistem após sair do carro. A pé e perto do veículo, **E** abre o `RepairSession` (estado `repair`): a câmera enquadra o painel danificado e o `BodyRepairActivity` conduz quatro etapas manuais — soltar os fixadores, arrastar o martelo pelo mapa de amassados (cada acerto esconde um amassado), escolher e instalar a peça certa para a zona detectada (`front`, `rear` ou `side`) e apertar os parafusos na sequência 1·2·3·4. Ao concluir, `DrivingSystem.repair` zera o dano, restaura o teto de velocidade e mantém a peça nova; sair no meio restaura o estado visual anterior do carro.
+
 ## Propriedade e encerramento
 
 Game aborta listeners globais, remove handlers de toque e encerra sessões antes do motor. Sessões removem eventos e controladores orbitais; óleo descarta rigs e libera travas. Engine para o loop, invalida o registro, encerra frota/reflexos/controles, descarta recursos da cena e remove o canvas. O encerramento de Game/Engine/frota é idempotente.
@@ -84,7 +86,7 @@ workshop.json define implantação e câmeras; equipment.json, activities.json e
 
 Sombras WebGL continuam desativadas em todas as qualidades, como antes desta etapa; sombras de contato e sonda estática permanecem. Geometria, materiais, posições e luzes não foram redesenhados. Não há medição de FPS no hardware real nem justificativa para otimizações especulativas.
 
-Não foram introduzidos EventBus, hierarquia de atividades, TypeScript ou framework. AssemblySession/OilChangeSession continuam coordenadores de suas práticas; as regras já estão separadas em education. Consulte o README para extensão e o [relatório](refatoracao.md) para backup, evidências e limitações.
+Não foram introduzidos EventBus, hierarquia de atividades, TypeScript ou framework. InspectionSession/OilChangeSession continuam coordenadores de suas práticas; as regras já estão separadas em education. Consulte o README para extensão e o [relatório](refatoracao.md) para backup, evidências e limitações.
 
 ## Modo de inspeção
 

@@ -6,8 +6,6 @@ import { AppUI } from '../ui/AppUI.js';
 import { EquipmentPanel } from '../ui/EquipmentPanel.js';
 import { bindTouchControls } from '../ui/TouchControls.js';
 import { loadJSON } from '../systems/DataLoader.js';
-import { VehicleStation } from '../objects/VehicleStation.js';
-import { AssemblySession } from '../systems/AssemblySession.js';
 import { OilChangeSession } from '../systems/OilChangeSession.js';
 import { MaintenanceStation } from '../objects/MaintenanceStation.js';
 import { collectInspectableVehicles } from '../vehicles/InspectableVehicles.js';
@@ -16,9 +14,11 @@ import { InspectionSession } from '../systems/InspectionSession.js';
 import { InspectionPanel } from '../ui/InspectionPanel.js';
 import { BenchEngine } from '../objects/BenchEngine.js';
 import { BenchEngineSession } from '../systems/BenchEngineSession.js';
+import { RepairSession } from '../systems/RepairSession.js';
 import '../ui/oil-change.css';
 import '../ui/inspection.css';
 import '../ui/driving.css';
+import '../ui/repair.css';
 
 const FOOT_HINT = 'W A S D · mover   Mouse · olhar   E · interagir   ESC · pausar';
 const DRIVE_HINT = 'W/S · acelerar   A/D · virar   ESPAÇO · freio de mão   E · sair do carro';
@@ -36,10 +36,10 @@ export function createGame(root) {
   let engine,
     interaction,
     panel,
-    assembly,
     oilChange,
     inspection,
     benchEngine,
+    repair,
     vehicleSelection,
     state = 'loading',
     mode = 'free',
@@ -203,13 +203,13 @@ export function createGame(root) {
     state = 'activities';
     ui.modal(
       'Escolha seu percurso',
-      `<p>Escolha uma prática para começar.</p><div class="mode-cards"><button id="start-oil-tour"><span>MANUTEN??O NO ELEVADOR</span><strong>Troca de ?leo</strong><small>Eleve o carro no posto azul, aproxime-se do c?rter e inicie a manuten??o.</small></button><button id="start-practice"><span>OFICINA PRÁTICA · 4 SERVIÇOS</span><strong>Mexer no carro</strong><small>Monte a roda, troque o filtro, teste a bateria e acenda as luzes.</small></button><button data-mode="free"><span>EXPLORAÇÃO LIVRE</span><strong>Conheça no seu ritmo</strong><small>Caminhe até o veículo à direita ou conheça a bancada à esquerda.</small></button><button data-mode="guided"><span>VISITA GUIADA</span><strong>Fundamentos da bancada</strong><small>Siga três etapas: encontre, conheça e responda.</small></button><button data-mode="mission"><span>MISSÃO EDUCATIVA</span><strong>Conhecer o posto</strong><small>Encontre a bancada e conclua uma atividade de duas questões.</small></button></div><button id="activities-close">Voltar</button>`,
+      `<p>Escolha uma prática para começar.</p><div class="mode-cards"><button id="start-oil-tour"><span>MANUTEN??O NO ELEVADOR</span><strong>Troca de ?leo</strong><small>Eleve o carro no posto azul, aproxime-se do c?rter e inicie a manuten??o.</small></button><button id="start-practice"><span>OFICINA PRÁTICA · 8 PRÁTICAS</span><strong>Mexer no carro</strong><small>A janela do carro reúne roda, filtro, bateria, luzes, palheta, lavador, velas e pneus.</small></button><button data-mode="free"><span>EXPLORAÇÃO LIVRE</span><strong>Conheça no seu ritmo</strong><small>Caminhe até o veículo à direita ou conheça a bancada à esquerda.</small></button><button data-mode="guided"><span>VISITA GUIADA</span><strong>Fundamentos da bancada</strong><small>Siga três etapas: encontre, conheça e responda.</small></button><button data-mode="mission"><span>MISSÃO EDUCATIVA</span><strong>Conhecer o posto</strong><small>Encontre a bancada e conclua uma atividade de duas questões.</small></button></div><button id="activities-close">Voltar</button>`,
     );
     ui.$('modal')
       .querySelectorAll('[data-mode]')
       .forEach(b => (b.onclick = () => enter(b.dataset.mode)));
     ui.bind('activities-close', home);
-    ui.bind('start-practice', startAssembly);
+    ui.bind('start-practice', startPractice);
     ui.bind('start-oil-tour', () => {
       enter('free');
       ui.toast(
@@ -217,15 +217,12 @@ export function createGame(root) {
       );
     });
   }
-  function startAssembly() {
-    if (state === 'assembly') return;
-    if (state === 'home' || state === 'activities') engine.controls.reset();
-    engine.driving?.cancel();
-    setHint(FOOT_HINT);
-    panel.close();
-    ui.closeModal();
-    setState('assembly');
-    assembly.open();
+  function startPractice() {
+    if (!engine) return;
+    if (state === 'home' || state === 'activities') enter('free');
+    if (state !== 'playing') return;
+    const vehicle = collectInspectableVehicles(engine).find(item => item.id === 'veiculo-pratica');
+    if (vehicle) chooseVehicle(vehicle);
   }
   async function chooseVehicle(vehicle) {
     if (state !== 'playing') return;
@@ -260,6 +257,14 @@ export function createGame(root) {
     updateObjective();
     setHint(FOOT_HINT);
   }
+  function openRepair() {
+    if (state !== 'playing' || !engine?.driving?.needsRepair) return false;
+    interaction.update(false);
+    ui.updateInteraction(null, false);
+    if (!repair.open(engine.driving)) return false;
+    setState('repair');
+    return true;
+  }
   function openEquipment() {
     if (state !== 'playing') return;
     if (engine.driving?.active) {
@@ -267,6 +272,10 @@ export function createGame(root) {
       return;
     }
     if (!interaction.current && engine.driving?.isNearby()) {
+      if (engine.driving.needsRepair) {
+        openRepair();
+        return;
+      }
       enterCar();
       return;
     }
@@ -288,10 +297,6 @@ export function createGame(root) {
     }
     if (item.data.type === 'lift') {
       if (item.activate()) audio.play();
-      return;
-    }
-    if (item.data.type === 'assembly') {
-      startAssembly();
       return;
     }
     setState('panel');
@@ -318,6 +323,18 @@ export function createGame(root) {
       ]);
       if (disposed) return;
       engine = new Engine(ui.$('viewport'), config, progress.data.settings, pause);
+      engine.driving.onCrash = (damage, kmh) => {
+        audio.play();
+        ui.toast(
+          damage >= 0.85
+            ? `Batida a ${kmh} km/h! O carro amassou bastante. Pare e saia (E) para fazer a funilaria.`
+            : `Batida a ${kmh} km/h. O carro amassou: pare e saia (E) para reparar a carroceria.`,
+        );
+      };
+      engine.driving.onRepair = () => {
+        audio.play(true);
+        ui.toast('Funilaria concluída. O carro está liberado.');
+      };
       if (config.vehicles?.length) await engine.loadVehicles(config.vehicles);
       if (disposed) return;
       audio.enabled = progress.data.settings.audio;
@@ -357,7 +374,6 @@ export function createGame(root) {
         new InspectionPanel(root, () => benchEngine.close()),
         resume,
       );
-      engine.registry.attach(new VehicleStation(engine.world.vehicle));
       for (const lift of engine.world.lifts) engine.registry.attach(lift);
       for (const lift of engine.world.lifts) engine.registry.attach(new MaintenanceStation(lift));
       oilChange = new OilChangeSession(engine, ui, progress, audio, () => {
@@ -366,11 +382,6 @@ export function createGame(root) {
         showPause(
           'Atividade de óleo encerrada. O exercício foi restaurado; resultados completos ficam salvos.',
         );
-      });
-      assembly = new AssemblySession(engine, ui, assemblyDefinition, progress, audio, () => {
-        setState('paused');
-        refreshProgress();
-        showPause('Prática encerrada. Você pode retomar a exploração ou voltar ao menu.');
       });
       inspection = new InspectionSession(
         engine,
@@ -381,6 +392,15 @@ export function createGame(root) {
         },
         { progress, assemblyDefinition },
       );
+      repair = new RepairSession(engine, audio, completed => {
+        setState('paused');
+        refreshProgress();
+        showPause(
+          completed
+            ? 'Funilaria concluída. O carro está liberado para voltar à pista.'
+            : 'Reparo interrompido. O carro segue amassado até a funilaria terminar.',
+        );
+      });
       vehicleSelection = new VehicleSelection(
         engine,
         [
@@ -413,7 +433,7 @@ export function createGame(root) {
       ui.bind('how', () => showHelp('home'));
       ui.bind('activities', showActivities);
       ui.bind('settings', () => showSettings('home'));
-      ui.bind('practice', startAssembly);
+      ui.bind('practice', startPractice);
       ui.bind('pause', () => pause());
       ui.bind('help', () => showHelp('playing'));
       ui.bind('interact', openEquipment);
@@ -449,13 +469,17 @@ export function createGame(root) {
         { signal: abort.signal },
       );
       engine.start(dt => {
-        assembly.update(dt);
         oilChange.update(dt);
         const driving = Boolean(engine.driving?.active);
         const canPlay = state === 'playing';
         let target = interaction.update(canPlay && !driving);
         if (!target && canPlay && !driving && engine.driving?.isNearby()) {
-          target = { data: { name: 'Carro de testes' }, actionLabel: 'Dirigir na pista · E' };
+          target = {
+            data: { name: 'Carro de testes' },
+            actionLabel: engine.driving.needsRepair
+              ? 'Carro amassado · reparar carroceria · E'
+              : 'Dirigir na pista · E',
+          };
         }
         ui.updateInteraction(target, canPlay && !driving);
         ui.updateDrive(engine.driving);
@@ -479,9 +503,9 @@ export function createGame(root) {
     vehicleSelection?.dispose();
     benchEngine?.dispose();
     inspection?.dispose();
+    repair?.dispose();
     interaction?.update(false);
     oilChange?.dispose();
-    assembly?.dispose();
     engine?.dispose();
     audio.dispose();
     ui.dispose();

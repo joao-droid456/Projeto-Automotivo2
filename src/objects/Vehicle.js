@@ -75,7 +75,7 @@ export class Vehicle {
     round([3.85, 0.36, 1.56], black, [0, 0.51, 0], this.group);
     this.undercarriage = createUndercarriage({ metal, black, rubber, serviceable: options.serviceable });
     this.group.add(this.undercarriage);
-    this.group.add(createVehicleExterior({ body: orange, trim: black, metal, glass }));
+    this.group.add(createVehicleExterior({ body: orange, trim: black, metal, glass, fixedWipers: displayOnly }));
     this.interior = createVehicleInterior();
     this.group.add(this.interior);
     // Flancs extrudés avec véritables passages de roue, pas de cube posé sur quatre roues.
@@ -130,27 +130,61 @@ export class Vehicle {
       this.interior.traverse(o => { o.userData.static = false; });
       return;
     }
-    this.engine = new THREE.Group(); this.engine.position.set(-1.4, 0.8, 0); this.group.add(this.engine);
-    round([0.6, 0.35, 0.65], metal, [0, 0, 0], this.engine);
-    round([0.63, 0.08, 0.38], black, [0, 0.21, 0], this.engine);
-    for (let i = 0; i < 4; i++) cylinder(0.045, 0.12, metal, [-0.23 + i * 0.15, 0.27, 0], this.engine);
-    this.airbox = new THREE.Group(); this.airbox.position.set(-1.42, 1.01, 0.43); this.group.add(this.airbox);
+    // Alturas contidas sob a face inferior do capô fechado (y ≈ 1,01).
+    this.engine = new THREE.Group(); this.engine.position.set(-1.4, 0.74, 0); this.group.add(this.engine);
+    round([0.6, 0.28, 0.65], metal, [0, 0, 0], this.engine);
+    round([0.63, 0.06, 0.38], black, [0, 0.16, 0], this.engine);
+    for (let i = 0; i < 4; i++) cylinder(0.03, 0.1, metal, [-0.23 + i * 0.15, 0.19, 0], this.engine);
+    this.airbox = new THREE.Group(); this.airbox.position.set(-1.42, 0.88, 0.43); this.group.add(this.airbox);
     round([0.48, 0.08, 0.35], black, [0, 0, 0], this.airbox, 0.035);
-    this.filter = round([0.39, 0.045, 0.27], paint('#c9b48a'), [0, 0.06, 0], this.airbox, 0.015);
-    for (let i = 0; i < 10; i++) round([0.018, 0.014, 0.24], metal, [-0.17 + i * 0.038, 0.029, 0], this.filter, 0.005);
-    this.filterCover = round([0.48, 0.055, 0.35], black, [0, 0.105, 0], this.airbox, 0.025);
-    this.battery = new THREE.Group(); this.battery.position.set(-1.45, 0.98, -0.46); this.group.add(this.battery);
+    this.filter = round([0.39, 0.04, 0.27], paint('#c9b48a'), [0, 0.045, 0], this.airbox, 0.015);
+    for (let i = 0; i < 10; i++) round([0.018, 0.014, 0.24], metal, [-0.17 + i * 0.038, 0.024, 0], this.filter, 0.005);
+    this.filterCover = round([0.48, 0.05, 0.35], black, [0, 0.075, 0], this.airbox, 0.025);
+    this.battery = new THREE.Group(); this.battery.position.set(-1.45, 0.86, -0.46); this.group.add(this.battery);
     this.engine.userData.inspectionPart = 'engine';
     this.airbox.userData.inspectionPart = 'filter';
     this.battery.userData.inspectionPart = 'battery';
-    round([0.42, 0.23, 0.28], black, [0, 0, 0], this.battery, 0.025);
+    round([0.42, 0.18, 0.28], black, [0, 0, 0], this.battery, 0.025);
     this.terminals = [];
     for (const side of [-1, 1]) {
-      const terminal = round([0.075, 0.055, 0.075], paint(side > 0 ? '#df493e' : '#849397'), [side * 0.13, 0.14, 0], this.battery, 0.015);
+      const terminal = round([0.075, 0.05, 0.075], paint(side > 0 ? '#df493e' : '#849397'), [side * 0.13, 0.11, 0], this.battery, 0.015);
       this.terminals.push(terminal);
     }
     this.lightsOn = false; this.hazardsOn = false; this.lightTime = 0;
     this.filterCoverLift = 0; this.filterLift = 0;
+    // Peças de manutenção adicionais: limpador, lavador, bobina/vela e válvulas.
+    this.wiper = new THREE.Group(); this.wiper.position.set(-0.935, 1.24, 0); this.group.add(this.wiper);
+    this.wiper.userData.inspectionPart = 'wiper-arm';
+    this.wiperBladeMaterial = new THREE.MeshStandardMaterial({ color: '#565b5e', roughness: 0.9 });
+    this.wiperBlades = [];
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Group(); arm.position.z = side * 0.3; arm.rotation.y = 0.16; this.wiper.add(arm);
+      mesh(new THREE.BoxGeometry(0.022, 0.02, 0.46), black, [0, 0, 0], arm).userData.inspectionPart = 'wiper-arm';
+      this.wiperBlades.push(
+        mesh(new THREE.BoxGeometry(0.026, 0.028, 0.44), this.wiperBladeMaterial, [0.012, -0.02, 0.01], arm),
+      );
+      this.wiperBlades.at(-1).userData.inspectionPart = 'wiper-blade';
+    }
+    this.washer = new THREE.Group(); this.washer.position.set(-1.7, 0.8, 0.7); this.group.add(this.washer);
+    this.washer.userData.inspectionPart = 'washer';
+    round([0.2, 0.3, 0.16], new THREE.MeshStandardMaterial({ color: '#d5dad9', roughness: 0.5, metalness: 0.08 }), [0, 0, 0], this.washer, 0.03);
+    this.washerFluid = round([0.14, 0.22, 0.025], new THREE.MeshStandardMaterial({ color: '#4aa7d8', roughness: 0.35, metalness: 0.05 }), [0, -0.02, 0.086], this.washer, 0.01);
+    this.washerFluid.userData.inspectionPart = 'washer';
+    this.washerCap = round([0.07, 0.03, 0.07], black, [0, 0.17, 0], this.washer, 0.008);
+    this.washerCap.userData.inspectionPart = 'washer-cap';
+    this.coil = round([0.5, 0.05, 0.2], black, [0, 0.22, 0], this.engine, 0.02);
+    this.coil.userData.inspectionPart = 'ignition-coil';
+    this.sparkPlug = mesh(
+      new THREE.CylinderGeometry(0.018, 0.022, 0.12, 8),
+      new THREE.MeshStandardMaterial({ color: '#71675a', roughness: 0.45, metalness: 0.65 }),
+      [0.08, 0.19, 0.2],
+      this.engine,
+    );
+    this.sparkPlug.userData.inspectionPart = 'spark-plug';
+    this.tireGauge = round([0.07, 0.1, 0.035], new THREE.MeshStandardMaterial({ color: '#2f3538', roughness: 0.5, metalness: 0.4 }), [-1.17, 0.66, 1.08], this.group, 0.012);
+    this.tireGauge.userData.inspectionPart = 'tire-gauge';
+    this.tireGauge.visible = false;
+    this.tireValves = [];
     this.wheels = [];
     for (const x of [-1.24, 1.21]) for (const side of [-1, 1]) {
       const wheel = createWheel(); wheel.position.set(x, 0.4, side * 0.84); if (side < 0) wheel.rotation.y = Math.PI;
@@ -166,7 +200,11 @@ export class Vehicle {
       cylinder(0.17, 0.065, metal, [0, 0, -0.025], hub).userData.inspectionPart = 'wheel-hub';
       cylinder(0.055, 0.11, metal, [0, 0, 0.03], hub).userData.inspectionPart = 'wheel-hub';
       round([0.09, 0.18, 0.09], paint('#7b7d70'), [0.155, 0.03, -0.02], hub, 0.025);
-      this.wheelStations.set(wheel.userData.inspectionPart, { wheel, hub, supports: [] });
+      cylinder(0.011, 0.04, metal, [0.07, 0.22, 0.19], hub, 8).userData.inspectionPart = 'tire-valve';
+      const valveCap = round([0.022, 0.02, 0.022], black, [0.07, 0.22, 0.225], hub, 0.005);
+      valveCap.userData.inspectionPart = 'tire-valve';
+      this.tireValves.push(valveCap);
+      this.wheelStations.set(wheel.userData.inspectionPart, { wheel, hub, valveCap, supports: [] });
     }
     this.hubGroup = this.wheelStations.get('front-wheel-left').hub;
     // Suporte fixo didático sob o eixo. Não é um elevador operável.
@@ -186,15 +224,65 @@ export class Vehicle {
     }
     this.bolts = this.wheelStations.get('front-wheel-left').bolts;
     this.homeWheelPosition = this.activeWheel.position.clone();
+    this.wiperLift = 0; this.wiperBladeVisible = true; this.wiperBladeNew = false;
+    this.washerCapLift = 0; this.washerLevel = 0.35;
+    this.coilLift = 0; this.plugVisible = true; this.plugNew = false;
+    this.valveCapVisible = true; this.gaugeVisible = false; this.pressureChecked = false;
+    this.applyServiceVisuals();
     this.hoodOpen = false;
     if (options.color) this.group.traverse(o => { if (o.isMesh) o.userData.static = true; });
     this.interior.traverse(o => { o.userData.static = false; });
   }
   setHood(open) { this.hoodOpen = open; }
+
+  applyServiceVisuals() {
+    this.wiper.position.y = 1.24 + this.wiperLift * 0.09;
+    this.wiper.position.x = -0.935 - this.wiperLift * 0.02;
+    for (const blade of this.wiperBlades) blade.visible = this.wiperBladeVisible;
+    this.wiperBladeMaterial.color.set(this.wiperBladeNew ? '#2f3437' : '#6f7477');
+    this.washerCap.position.y = 0.17 + this.washerCapLift;
+    this.washerFluid.scale.y = this.washerLevel;
+    this.washerFluid.position.y = -0.13 + 0.11 * this.washerLevel;
+    this.coil.position.y = 0.22 + this.coilLift;
+    this.sparkPlug.visible = this.plugVisible;
+    this.sparkPlug.material.color.set(this.plugNew ? '#e2dccb' : '#71675a');
+    this.wheelStations.get('front-wheel-left').valveCap.visible = this.valveCapVisible;
+    this.tireGauge.visible = this.gaugeVisible;
+    this.tireGauge.material.color.set(this.pressureChecked ? '#79c98a' : '#2f3538');
+  }
+
+  /** Estado visual das práticas de limpador, lavador, velas e calibragem. */
+  applyServiceStep(job, step) {
+    if (job === 'wiper') {
+      this.wiperLift = step === 1 || step === 2 ? 1 : 0;
+      this.wiperBladeVisible = step !== 2;
+      this.wiperBladeNew = step >= 3;
+    } else if (job === 'washer') {
+      this.washerCapLift = step === 1 || step === 2 ? 0.06 : 0;
+      this.washerLevel = step >= 3 ? 0.9 : 0.35;
+    } else if (job === 'plugs') {
+      this.coilLift = step === 1 || step === 2 ? 0.16 : 0;
+      this.plugVisible = step !== 2;
+      this.plugNew = step >= 3;
+    } else if (job === 'pressure') {
+      this.valveCapVisible = step === 0 || step >= 4;
+      this.gaugeVisible = step >= 2 && step < 4;
+      this.pressureChecked = step >= 3 && step < 4;
+    }
+    this.applyServiceVisuals();
+  }
+
+  resetServiceVisuals() {
+    this.wiperLift = 0; this.wiperBladeVisible = true; this.wiperBladeNew = false;
+    this.washerCapLift = 0; this.washerLevel = 0.35;
+    this.coilLift = 0; this.plugVisible = true; this.plugNew = false;
+    this.valveCapVisible = true; this.gaugeVisible = false; this.pressureChecked = false;
+    this.applyServiceVisuals();
+  }
   update(dt) {
     this.hood.rotation.z = THREE.MathUtils.damp(this.hood.rotation.z, this.hoodOpen ? -1.05 : 0, 8, dt);
-    this.filterCover.position.y = THREE.MathUtils.damp(this.filterCover.position.y, 0.105 + this.filterCoverLift, 7, dt);
-    this.filter.position.y = THREE.MathUtils.damp(this.filter.position.y, 0.06 + this.filterLift, 7, dt);
+    this.filterCover.position.y = THREE.MathUtils.damp(this.filterCover.position.y, 0.075 + this.filterCoverLift, 7, dt);
+    this.filter.position.y = THREE.MathUtils.damp(this.filter.position.y, 0.045 + this.filterLift, 7, dt);
     this.lightTime += dt;
     this.headlightMaterial.emissiveIntensity = this.lightsOn ? 2.5 : 0.05;
     this.indicatorMaterial.emissiveIntensity = this.hazardsOn && Math.sin(this.lightTime * 8) > 0 ? 3 : 0;

@@ -9,7 +9,7 @@ export class InspectionWorkbench {
 
   start(job) {
     if (
-      !['wheel', 'filter', 'battery', 'lights'].includes(job) ||
+      !['wheel', 'filter', 'battery', 'lights', 'wiper', 'washer', 'plugs', 'pressure'].includes(job) ||
       !this.vehicle?.filter ||
       (job === 'wheel' && !this.definition)
     )
@@ -27,20 +27,34 @@ export class InspectionWorkbench {
       wheelVisible: v.activeWheel.visible,
       bolts: v.bolts.map(bolt => ({ visible: bolt.visible, color: bolt.material.color.clone() })),
       terminals: v.terminals.map(terminal => terminal.material.color.clone()),
+      serviceParts: {
+        wiperLift: v.wiperLift,
+        wiperBladeVisible: v.wiperBladeVisible,
+        wiperBladeNew: v.wiperBladeNew,
+        washerCapLift: v.washerCapLift,
+        washerLevel: v.washerLevel,
+        coilLift: v.coilLift,
+        plugVisible: v.plugVisible,
+        plugNew: v.plugNew,
+        valveCapVisible: v.valveCapVisible,
+        gaugeVisible: v.gaugeVisible,
+        pressureChecked: v.pressureChecked,
+      },
     };
     this.job = job;
     this.activity = job === 'wheel' ? new AssemblyActivity(this.definition) : new ServiceActivity(job);
-    if (job === 'filter' || job === 'battery') v.setHood(true);
+    if (['filter', 'battery', 'washer', 'plugs'].includes(job)) v.setHood(true);
     this.sync();
     return true;
   }
 
   get instruction() {
     if (!this.activity) return '';
-    if (this.activity.completed)
-      return this.job === 'battery'
-        ? 'Leitura simulada: 12,6 V. Teste concluído e resultado salvo.'
-        : 'Prática concluída. O resultado foi salvo.';
+    if (this.activity.completed) {
+      if (this.job === 'battery') return 'Leitura simulada: 12,6 V. Teste concluído e resultado salvo.';
+      if (this.job === 'pressure') return 'Leitura simulada: 32 psi. Calibragem concluída e resultado salvo.';
+      return 'Prática concluída. O resultado foi salvo.';
+    }
     return this.job === 'wheel'
       ? this.activity.current.instruction
       : this.activity.definition.steps[this.activity.step];
@@ -110,6 +124,8 @@ export class InspectionWorkbench {
       if (a.step > 0 && a.step < 3) v.terminals[1].material.color.set('#ff8b64');
       if (a.step > 1 && a.step < 3) v.terminals[0].material.color.set('#8ad6ff');
     }
+    if (['wiper', 'washer', 'plugs', 'pressure'].includes(this.job))
+      v.applyServiceStep(this.job, a.step);
   }
 
   restore() {
@@ -129,6 +145,8 @@ export class InspectionWorkbench {
       bolt.material.color.copy(s.bolts[i].color);
     });
     v.terminals.forEach((terminal, i) => terminal.material.color.copy(s.terminals[i]));
+    Object.assign(v, s.serviceParts);
+    v.applyServiceVisuals();
     this.snapshot = null;
     this.activity = null;
     this.job = null;

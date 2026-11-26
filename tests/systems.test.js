@@ -21,6 +21,14 @@ test('desliza junto à parede e impede penetração em quinas', () => {
   assert.ok(p.x <= -1.3); assert.ok(p.z > 0.5); assert.equal(c.blocked(p.x, p.z), false);
   assert.equal(c.blocked(1.1, 1.1), true); assert.equal(c.blocked(1.4, 1.4), false);
 });
+test('move relata bloqueio real mesmo com deslocamento subdividido', () => {
+  const free = new CollisionSystem(1.15); free.addBox(200, 200, 4, 4, 'longe');
+  const p = { x: 3.7, z: -9.1 };
+  assert.equal(free.move(p, 0.6944, 0.0213, 1.15), false, 'pista livre não pode bloquear por arredondamento');
+  assert.ok(Math.hypot(p.x - 3.7, p.z + 9.1) > 0.69);
+  const wall = new CollisionSystem(1.15); wall.addBox(5, 0, 0.4, 10, 'parede');
+  assert.equal(wall.move({ x: 0, z: 0 }, 10, 0, 1.15), true);
+});
 test('proximidade respeita obstáculos e ignora volume do próprio equipamento', () => {
   const c = new CollisionSystem(); c.addBox(0, 0, 2, 1, 'bancada');
   assert.equal(c.lineBlocked({ x: 0, z: 3 }, { x: 0, z: 0 }, 'bancada'), false);

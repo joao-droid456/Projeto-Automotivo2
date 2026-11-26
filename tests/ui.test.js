@@ -36,6 +36,15 @@ test('aproximar, operar e sair do elevador atualiza o HUD sem interromper os qua
     assert.equal(nodes.get('interact').classList.contains('hidden'), true);
     ui.updateInteraction(target, false);
     assert.equal(nodes.get('interact').classList.contains('hidden'), true);
+    const driving = { active: true, motion: { speedKmh: 42, gear: 'D' }, needsRepair: true };
+    ui.updateDrive(driving);
+    assert.equal(nodes.get('drive-speed').textContent, '042');
+    assert.equal(nodes.get('repair-card').classList.contains('hidden'), false);
+    driving.needsRepair = false;
+    ui.updateDrive(driving);
+    assert.equal(nodes.get('repair-card').classList.contains('hidden'), true);
+    ui.updateDrive(null);
+    assert.equal(nodes.get('drive-hud').classList.contains('hidden'), true);
   } finally {
     if (original === undefined) delete globalThis.document;
     else globalThis.document = original;

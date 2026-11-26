@@ -140,6 +140,38 @@ export const VEHICLE_PARTS = {
     'Acabamento na extremidade dianteira, junto à grade e às luzes.',
   ),
   'rear-bumper': part('Para-choque traseiro', 'Acabamento na extremidade traseira do veículo.'),
+  'wiper-arm': part(
+    'Braço do limpador',
+    'Estrutura articulada que pressiona a palheta contra o vidro. Levante o braço para trocar a palheta sem forçar o mecanismo.',
+  ),
+  'wiper-blade': part(
+    'Palheta do limpador',
+    'Borracha de limpeza do para-brisa presa ao braço. Palhetas gastas deixam marcas e reduzem a visibilidade sob chuva.',
+  ),
+  washer: part(
+    'Reservatório do lavador',
+    'Recipiente do fluido de limpeza do para-brisa. Confira o nível com o veículo parado e complete com o fluido recomendado.',
+  ),
+  'washer-cap': part(
+    'Tampa do reservatório',
+    'Tampa do bocal do lavador. Ela evita vazamentos e a entrada de sujeira no fluido; feche-a após completar o nível.',
+  ),
+  'ignition-coil': part(
+    'Bobina de ignição',
+    'Componente que eleva a tensão para a vela. Desencaixe com o motor desligado antes de acessar a vela.',
+  ),
+  'spark-plug': part(
+    'Vela de ignição',
+    'Gera a centelha que inicia a combustão. A troca exige remover a bobina e respeitar o torque de aperto especificado.',
+  ),
+  'tire-valve': part(
+    'Válvula do pneu',
+    'Bocal de enchimento e vedação do pneu. Retire a tampa apenas para medir ou completar a pressão e recoloque em seguida.',
+  ),
+  'tire-gauge': part(
+    'Manômetro de pneus',
+    'Instrumento de medição da pressão. A leitura de 32 psi desta prática é simulada e ilustrativa.',
+  ),
 };
 for (const [axle, axleName] of [
   ['front', 'dianteira'],

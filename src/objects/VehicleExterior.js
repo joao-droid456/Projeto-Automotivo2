@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createVehicleCabin } from './VehicleCabin.js';
 
 // Fixed trim is merged locally; hood, wheels and service parts stay independent.
-export function createVehicleExterior({ body, trim, metal, glass }) {
+export function createVehicleExterior({ body, trim, metal, glass, fixedWipers = true }) {
   const group = new THREE.Group(); group.name = 'acabamento-exterior';
   const batches = new Map();
   const cabin = createVehicleCabin({ body, trim, glass });
@@ -40,8 +40,10 @@ export function createVehicleExterior({ body, trim, metal, glass }) {
     box('suporte de placa', [0.018, 0.13, 0.38], [x, 0.73, 0]);
     box('placa neutra', [0.02, 0.085, 0.3], [x + Math.sign(x) * 0.012, 0.73, 0], metal);
   }
-  for (const z of [-0.3, 0.3]) {
-    box('limpador de para-brisa', [0.012, 0.014, 0.48], [-0.935, 1.24, z], trim, [0, 0.16, 0]);
+  if (fixedWipers) {
+    for (const z of [-0.3, 0.3]) {
+      box('limpador de para-brisa', [0.012, 0.014, 0.48], [-0.935, 1.24, z], trim, [0, 0.16, 0]);
+    }
   }
   box('terceira luz de freio', [0.025, 0.035, 0.28], [1.365, 1.35, 0], metal);
   for (const [material, geometries] of batches) {

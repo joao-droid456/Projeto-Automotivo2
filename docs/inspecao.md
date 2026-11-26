@@ -2,7 +2,7 @@
 
 ## Uso
 
-A roda dianteira esquerda do carro didático agora oferece **Trocar roda — interação manual**, com giros nos fixadores, arraste, rotação com Shift e encaixe automático. A sequência é executada diretamente no 3D; ferramentas permanecem selecionáveis no painel. A montagem guiada antiga e os outros serviços não foram removidos. Consulte [roda-manual.md](roda-manual.md) para o fluxo atualizado, limites e testes.
+A janela reúne todas as práticas do carro didático numa lista lateral: troca manual de roda, filtro de ar, bateria, luzes, palheta do limpador, lavador de para-brisa, vela de ignição e pressão dos pneus. A antiga estação do carro por proximidade e a tecla E foram removidas; clicar (ou tocar) no veículo é o caminho único para as práticas. A montagem guiada em tela cheia também foi substituída pela troca manual dentro da janela, que mantém a sequência didática e os resultados salvos. Consulte [roda-manual.md](roda-manual.md) para o fluxo atualizado, limites e testes.
 
 Identificação refinada das rodas: pneu, banda de rodagem, aro, raios, calota central, aberturas, cubo e fixadores têm descrições próprias nas superfícies representadas. A pequena tampa central não é descrita como uma calota integral. As peças mantêm a ação da roda correspondente, inclusive após batching; mudar entre componentes da mesma roda não reinicia a prática. Atualização validada por 72/72 testes Node, com raycasts nas superfícies reais e nos lotes dos carros de elevador.
 
@@ -10,11 +10,11 @@ Entre na oficina, olhe para um carro e clique nele (a mira indica o ponto seleci
 
 Os seis veículos atuais estão incluídos: carro didático, dois carros dos elevadores e três veículos cobertos. Os cobertos permanecem cobertos sem um modelo específico configurado; nenhuma carroceria fictícia foi adicionada. A frota GLB opcional também registra seus veículos, usando o LOD0 disponível na inspeção.
 
-Passe o mouse sobre uma peça para ver nome, descrição e destaque quando sua malha é independente. Clique para abrir o painel específico. No carro didático, há abertura/fechamento do capô, faróis e práticas de montagem da roda dianteira esquerda, filtro, bateria e luzes, executadas dentro da janela com as regras educativas existentes. Cada peça também permite exame em detalhe; o botão **Ver carro inteiro** restaura o enquadramento.
+Passe o mouse sobre uma peça para ver nome, descrição e destaque quando sua malha é independente. Clique para abrir o painel específico. No carro didático, a lista **Práticas** inicia diretamente qualquer uma das oito atividades e o painel da peça oferece o mesmo acesso; também há abertura/fechamento do capô, faróis e exames em detalhe. As práticas são executadas dentro da janela com as regras educativas existentes. As mesmas oito práticas constam do resumo de **Oficina prática**. Cada peça também permite exame em detalhe; o botão **Ver carro inteiro** restaura o enquadramento.
 
 Nos carros de elevador, capô e faróis têm ações quando os componentes existem. Portas, porta-malas e outras peças fixas possuem identificação e exame, mas não uma abertura fictícia. Carros cobertos identificam a capa; não se inventa o que está sob ela. GLBs detalhados podem identificar peças por `extras.inspectionPart` nos nós (IDs em VehicleParts); manipulação de um modelo diferente exige mapeamento próprio.
 
-As atividades anteriores continuam pelos caminhos existentes, inclusive E no carro didático e nas estações. Práticas na janela salvam progresso somente ao concluir; trocar de peça, encerrar uma prática ou fechar a janela restaura as alterações transitórias do exercício. Comandos diretos de capô e luzes permanecem no veículo, salvo se fizerem parte de um exercício restaurado.
+As atividades anteriores continuam pelos caminhos existentes: E nas estações, elevadores e carro de testes. Práticas na janela salvam progresso somente ao concluir; trocar de peça, encerrar uma prática ou fechar a janela restaura as alterações transitórias do exercício. Comandos diretos de capô e luzes permanecem no veículo, salvo se fizerem parte de um exercício restaurado.
 
 ## Renderização e estado
 

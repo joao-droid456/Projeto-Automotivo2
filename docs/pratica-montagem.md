@@ -6,7 +6,7 @@ Evolução do visualizador para uma prática de manipulação de peças. A inspi
 
 ## Como usar
 
-Clique em **Montar no carro** na tela inicial ou em **Atividades → Montar a roda no veículo**. Também é possível caminhar até o lado da roda dianteira do carro à direita e pressionar E.
+Clique no carro didático (ou use **Mexer no carro** na tela inicial) e escolha **Trocar roda** na lista de práticas. Dentro da janela, a roda dianteira esquerda abre a troca manual: gire os fixadores com arraste, retire a roda, alinhe com Shift e encaixe. A antiga prática guiada em tela cheia e a entrada por proximidade/E foram removidas; a lista lateral continua oferecendo as outras sete práticas.
 
 Na prática, o mouse fica livre. Arraste a cena para girar, use a roda do mouse/pinça para aproximar. Selecione a peça na bandeja 3D ou nos botões do inventário e clique no alvo. Os botões “Alvo 1–4” são alternativa para teclado e telas pequenas. “Focar encaixe” recupera o enquadramento; “Ver carro” amplia o campo de visão.
 
@@ -25,12 +25,12 @@ O perfil didático **não representa um torque real**, nem é calibração de in
 
 - `public/data/assembly.json`: passos, instruções, objetivos e sequência.
 - `src/education/AssemblyActivity.js`: estado de peças, ferramenta, pré-requisitos e validação.
-- `src/systems/AssemblySession.js`: seleção por raycast, inventário, alvos, enquadramento orbital, animação, feedback e salvamento.
+- `src/systems/InspectionWorkbench.js`: adapta a montagem guiada e os serviços às ações da janela de inspeção, com restauração de estado.
+- `src/systems/ManualWheelSession.js`: troca manual da roda dentro da janela (arraste, ferramentas e sequência).
 - `src/objects/Vehicle.js`: carro procedural com passagens de roda, vidros, painéis coloridos, rodas separadas, cubo, fixadores e capô articulado.
-- `src/objects/VehicleStation.js`: integração com o registro e a interação por proximidade existentes.
-- `src/ui/assembly.css`: interface da prática para desktop e toque.
+- `src/ui/inspection.css`: janela de inspeção, lista de práticas e ferramentas da roda.
 
-O registro de resultado usa o sistema de progresso existente. São 12 ações; cada tentativa inválida reduz o indicador de aproveitamento em 5 pontos, até o mínimo zero. Trata-se de feedback exploratório, não nota oficial ou certificação. O estado parcial não é persistido; sair com ações em andamento pede confirmação.
+O registro de resultado usa o sistema de progresso existente. São 12 ações; cada tentativa inválida reduz o indicador de aproveitamento em 5 pontos, até o mínimo zero. Trata-se de feedback exploratório, não nota oficial ou certificação. O estado parcial não é persistido; trocar de prática ou fechar a janela restaura as peças do exercício.
 
 O ciclo é simplificado e orientado a aprendizagem da relação peça → encaixe → ferramenta → sequência → conferência. Não simula rosca, atrito, forças, torque físico, sustentação real, inspeção dimensional ou todos os procedimentos de manutenção. A expansão para motor, freios e suspensão precisa de estados, encaixes e modelos próprios; trocar apenas o texto do JSON não cria automaticamente outra máquina.
 

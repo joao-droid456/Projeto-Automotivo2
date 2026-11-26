@@ -22,12 +22,22 @@ export class CollisionSystem {
     });
   }
 
+  // Retorna se algum eixo foi impedido: comparar posições depois da subdivisão
+  // gera falsos positivos de 1 ULP ao somar os passos.
   move(position, dx, dz, radius = this.radius) {
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (radius * 0.45)));
+    let blocked = false;
     for (let i = 0; i < steps; i++) {
-      if (!this.blocked(position.x + dx / steps, position.z, radius)) position.x += dx / steps;
-      if (!this.blocked(position.x, position.z + dz / steps, radius)) position.z += dz / steps;
+      if (dx !== 0) {
+        if (!this.blocked(position.x + dx / steps, position.z, radius)) position.x += dx / steps;
+        else blocked = true;
+      }
+      if (dz !== 0) {
+        if (!this.blocked(position.x, position.z + dz / steps, radius)) position.z += dz / steps;
+        else blocked = true;
+      }
     }
+    return blocked;
   }
 
   // A interação também respeita obstáculos entre os olhos e o equipamento.

@@ -173,6 +173,22 @@ test('veículo procedural identifica peças reais e conserva cárter, suspensão
   disposeObject3D(vehicle.group);
 });
 
+test('compartimento do motor fica abaixo do capô fechado', () => {
+  const vehicle = new Vehicle([0, 0, 0]);
+  vehicle.group.updateMatrixWorld(true);
+  const hood = new THREE.Box3().setFromObject(vehicle.hood);
+  for (const [label, object] of [
+    ['motor', vehicle.engine],
+    ['filtro de ar', vehicle.airbox],
+    ['bateria', vehicle.battery],
+    ['lavador', vehicle.washer],
+  ]) {
+    const box = new THREE.Box3().setFromObject(object);
+    assert.ok(box.max.y < hood.min.y, `${label} atravessa o capô fechado`);
+  }
+  disposeObject3D(vehicle.group);
+});
+
 test('montagem na janela reutiliza pré-requisitos, rejeita sequência errada e salva somente na conclusão', () => {
   const vehicle = new Vehicle(),
     saved = [];
@@ -233,6 +249,149 @@ test('filtro, bateria e luzes têm ações próprias, estados visuais e restaura
   assert.equal(vehicle.lightsOn, false);
   work.restore();
   assert.equal(saved.length, 3);
+  disposeObject3D(vehicle.group);
+});
+
+test('janela de inspeção oferece as novas práticas ao selecionar as peças', () => {
+  let actions;
+  const session = Object.assign(Object.create(InspectionSession.prototype), {
+    workbench: { restore() {}, vehicle: { filter: {}, wheelStations: new Map() } },
+    panel: {
+      part(_part, available) {
+        actions = available;
+      },
+    },
+  });
+  for (const [id, job] of [
+    ['wiper-blade', 'wiper'],
+    ['washer-cap', 'washer'],
+    ['ignition-coil', 'plugs'],
+    ['tire-valve', 'pressure'],
+  ]) {
+    session.selectedPart = null;
+    session.selectPart({ id, actionId: id });
+    assert.ok(
+      actions.some(action => action.id === `start-${job}`),
+      id,
+    );
+  }
+});
+
+test('palheta, lavador, velas e válvulas têm ações próprias, estados visuais e restauração', () => {
+  const vehicle = new Vehicle(),
+    saved = [];
+  const work = new InspectionWorkbench(vehicle, definition, { complete: (...args) => saved.push(args) });
+  work.start('wiper');
+  work.perform('wiper-arm');
+  assert.equal(vehicle.wiperLift, 1);
+  assert.ok(vehicle.wiper.position.y > 1.24);
+  work.perform('wiper-blade');
+  assert.ok(vehicle.wiperBlades.every(blade => !blade.visible));
+  work.perform('wiper-blade');
+  assert.ok(vehicle.wiperBlades.every(blade => blade.visible));
+  assert.equal(vehicle.wiperBladeNew, true);
+  work.perform('wiper-arm');
+  assert.equal(saved.at(-1)[0], 'servico-wiper');
+  work.restore();
+  assert.equal(vehicle.wiperLift, 0);
+  assert.equal(vehicle.wiperBladeNew, false);
+  assert.equal(vehicle.wiper.position.y, 1.24);
+  work.start('washer');
+  assert.equal(vehicle.hoodOpen, true);
+  work.perform('washer-cap');
+  assert.ok(vehicle.washerCapLift > 0);
+  assert.ok(vehicle.washerCap.position.y > 0.17);
+  work.perform('washer');
+  work.perform('washer');
+  assert.ok(vehicle.washerLevel > 0.5);
+  assert.ok(vehicle.washerFluid.scale.y > 0.5);
+  work.perform('washer-cap');
+  assert.equal(saved.at(-1)[0], 'servico-washer');
+  work.restore();
+  assert.equal(vehicle.washerLevel, 0.35);
+  assert.equal(vehicle.hoodOpen, false);
+  work.start('plugs');
+  work.perform('ignition-coil');
+  assert.ok(vehicle.coilLift > 0);
+  assert.ok(vehicle.coil.position.y > 0.3);
+  work.perform('spark-plug');
+  assert.equal(vehicle.sparkPlug.visible, false);
+  work.perform('spark-plug');
+  assert.equal(vehicle.plugNew, true);
+  work.perform('ignition-coil');
+  assert.equal(saved.at(-1)[0], 'servico-plugs');
+  work.restore();
+  work.start('pressure');
+  work.perform('tire-valve');
+  assert.equal(vehicle.wheelStations.get('front-wheel-left').valveCap.visible, false);
+  work.perform('tire-gauge');
+  assert.equal(vehicle.tireGauge.visible, true);
+  work.perform('tire-gauge');
+  assert.equal(vehicle.pressureChecked, true);
+  work.perform('tire-valve');
+  assert.match(work.instruction, /32 psi/);
+  assert.equal(saved.at(-1)[0], 'servico-pressure');
+  work.restore();
+  assert.equal(vehicle.tireGauge.visible, false);
+  assert.equal(vehicle.wheelStations.get('front-wheel-left').valveCap.visible, true);
+  disposeObject3D(vehicle.group);
+});
+
+test('janela de inspeção lista as oito práticas e inicia pela peça correspondente', () => {
+  const vehicle = new Vehicle();
+  const started = [];
+  const session = Object.assign(Object.create(InspectionSession.prototype), {
+    active: true,
+    workbench: new InspectionWorkbench(vehicle, definition),
+    restoreExterior() {},
+    partAction(id) {
+      started.push(id);
+    },
+  });
+  assert.deepEqual(
+    session.practiceOptions().map(item => item.id),
+    ['wheel', 'filter', 'battery', 'lights', 'wiper', 'washer', 'plugs', 'pressure'],
+  );
+  session.startPractice('filter');
+  assert.equal(session.selectedPart.id, 'filter');
+  session.startPractice('wheel');
+  assert.equal(session.selectedPart.id, 'front-wheel-left');
+  assert.deepEqual(started, ['start-filter', 'start-wheel']);
+  assert.deepEqual(
+    Object.assign(Object.create(InspectionSession.prototype), {
+      workbench: new InspectionWorkbench(null, definition),
+    }).practiceOptions(),
+    [],
+  );
+  disposeObject3D(vehicle.group);
+});
+
+test('examinar de perto resolve alvo de prática iniciada pela lista', () => {
+  const vehicle = new Vehicle();
+  vehicle.group.updateMatrixWorld(true);
+  const session = Object.assign(Object.create(InspectionSession.prototype), {
+    workbench: new InspectionWorkbench(vehicle, definition),
+    orbit: { target: new THREE.Vector3(99, 99, 99) },
+  });
+  const filter = session.focusTarget({ id: 'filter' });
+  const filterWorld = vehicle.filter.getWorldPosition(new THREE.Vector3());
+  assert.ok(filter.distanceTo(filterWorld) < 1);
+  assert.ok(session.focusDirection({ id: 'filter' }, filter).z > 0);
+  const batteryTarget = session.focusTarget({ id: 'battery' });
+  assert.ok(session.focusDirection({ id: 'battery' }, batteryTarget).z < 0);
+  assert.equal(session.focusDirection({ id: 'lights' }, batteryTarget), null);
+  const localPoint = new THREE.Vector3(0.21, 0.05, 0);
+  const wheel = session.focusTarget({
+    id: 'wheel-rim',
+    object: vehicle.activeWheel,
+    localPoint,
+    point: new THREE.Vector3(1, 2, 3),
+  });
+  assert.ok(wheel.distanceTo(vehicle.activeWheel.localToWorld(localPoint.clone())) < 1e-6);
+  assert.ok(
+    session.focusTarget({ id: 'x', point: new THREE.Vector3(1, 2, 3) }).equals(new THREE.Vector3(1, 2, 3)),
+  );
+  assert.ok(session.focusTarget({ id: 'inexistente' }).equals(session.orbit.target));
   disposeObject3D(vehicle.group);
 });
 

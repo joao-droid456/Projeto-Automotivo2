@@ -2,9 +2,13 @@ import * as THREE from 'three';
 import { VehicleMotion } from '../machines/VehicleMotion.js';
 import { DrivableCar } from '../objects/DrivableCar.js';
 import { SkidMarks } from '../objects/SkidMarks.js';
+import { DriftSmoke } from '../objects/DriftSmoke.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const CAR_RADIUS = 1.15;
+const CRASH_MIN_KMH = 25;
+const LIMP_DAMAGE = 0.62;
+const LIMP_KMH = 55;
 
 export class DrivingSystem {
   constructor(engine) {
@@ -13,17 +17,29 @@ export class DrivingSystem {
     this.car = new DrivableCar();
     engine.scene.add(this.car.group);
     this.motion = new VehicleMotion({ position: spawn, heading });
+    this.baseMaxSpeed = this.motion.maxSpeed;
     this.active = false;
     this.nearby = false;
     this.touchHandbrake = false;
     this.marks = new SkidMarks(engine.scene);
+    this.smoke = new DriftSmoke(engine.scene);
+    this.smokeTimer = 0;
     this.probe = new THREE.Vector3();
     this.cameraTarget = new THREE.Vector3();
     this.lookTarget = new THREE.Vector3();
     this.lastMark = [null, null];
+    this.damage = 0;
+    this.crashCooldown = 0;
+    this.shake = 0;
+    this.onCrash = null;
+    this.onRepair = null;
     this.collider = engine.collision.addBox(spawn[0], spawn[1], 2.1, 4.5, 'carro-dirigivel');
     this.applyPose();
     this.updateCollider();
+  }
+
+  get needsRepair() {
+    return this.damage > 0.02;
   }
 
   applyPose() {
@@ -54,21 +70,30 @@ export class DrivingSystem {
   }
 
   update(dt) {
+    if (this.crashCooldown > 0) this.crashCooldown -= dt;
+    this.shake *= Math.exp(-7 * dt);
     if (!this.active) {
       this.nearby = this.isNearby();
+      this.smoke.update(dt, this.engine.camera);
       return;
     }
     const input = this.readInput();
     const previousX = this.motion.x, previousZ = this.motion.z;
     this.motion.step(dt, input);
+    const movedX = this.motion.x - previousX, movedZ = this.motion.z - previousZ;
+    const impactSpeed = this.motion.speed;
     this.probe.set(previousX, 0, previousZ);
-    this.engine.collision.move(this.probe, this.motion.x - previousX, this.motion.z - previousZ, CAR_RADIUS);
-    if (this.probe.x !== this.motion.x || this.probe.z !== this.motion.z) {
+    const blocked = this.engine.collision.move(this.probe, movedX, movedZ, CAR_RADIUS);
+    if (blocked) {
       const h = Math.min(dt, 0.05);
       this.motion.x = this.probe.x; this.motion.z = this.probe.z;
       this.motion.vx = (this.probe.x - previousX) / h;
       this.motion.vz = (this.probe.z - previousZ) / h;
       this.motion.syncAxes();
+    }
+    if (blocked && this.crashCooldown <= 0 && impactSpeed * 3.6 >= CRASH_MIN_KMH) {
+      const distance = Math.hypot(movedX, movedZ) || 1;
+      this.crash(impactSpeed, movedX / distance, movedZ / distance);
     }
     this.applyPose();
     this.updateCollider();
@@ -78,7 +103,28 @@ export class DrivingSystem {
       brake: input.throttle < 0 && this.motion.longitudinalSpeed > 0.4,
     });
     this.updateMarks(input);
+    this.updateSmoke(dt, input);
     this.updateCamera(dt);
+  }
+
+  updateSmoke(dt, input) {
+    this.smoke.update(dt, this.engine.camera);
+    const slipping =
+      this.motion.drifting || (input.handbrake && Math.abs(this.motion.longitudinalSpeed) > 4);
+    if (!slipping) {
+      this.smokeTimer = 0;
+      return;
+    }
+    this.smokeTimer -= dt;
+    if (this.smokeTimer > 0) return;
+    const slip = Math.min(1, Math.abs(this.motion.lateralSpeed) / 5 + (input.handbrake ? 0.4 : 0));
+    this.smokeTimer = 0.055 - slip * 0.025;
+    const sin = Math.sin(this.motion.heading), cos = Math.cos(this.motion.heading);
+    for (const side of [-1, 1]) {
+      const wx = this.motion.x + side * 0.84 * cos - 1.21 * sin;
+      const wz = this.motion.z - side * 0.84 * sin - 1.21 * cos;
+      this.smoke.emit(wx, wz, 0.55 + slip * 0.7, this.motion.vx, this.motion.vz);
+    }
   }
 
   updateMarks(input) {
@@ -110,6 +156,44 @@ export class DrivingSystem {
     else camera.position.lerp(this.cameraTarget, 1 - Math.exp(-5 * dt));
     this.lookTarget.set(this.motion.x + sin * 4.5, 1.15, this.motion.z + cos * 4.5);
     camera.lookAt(this.lookTarget);
+    if (this.shake > 0.001) {
+      camera.position.x += (Math.random() - 0.5) * this.shake;
+      camera.position.y += (Math.random() - 0.5) * this.shake * 0.6;
+    }
+  }
+
+  crash(speed, nx, nz) {
+    const severity = clamp((speed * 3.6 - CRASH_MIN_KMH) / 65, 0, 1);
+    this.damage = Math.min(1, this.damage + 0.3 + severity * 0.55);
+    this.car.setDamage(this.damage);
+    const px = -nz, pz = nx;
+    const dents = 2 + Math.round(severity * 4);
+    for (let i = 0; i < dents; i++) {
+      const lateral = (Math.random() - 0.5) * 1.2;
+      const forward = 1.7 + Math.random() * 0.55;
+      this.car.addDent(
+        new THREE.Vector3(
+          this.motion.x + nx * forward + px * lateral,
+          0.42 + Math.random() * 0.42,
+          this.motion.z + nz * forward + pz * lateral,
+        ),
+        0.3 + severity * 0.7,
+      );
+    }
+    this.shake = 0.1 + severity * 0.22;
+    this.crashCooldown = 0.9;
+    if (this.damage >= LIMP_DAMAGE) this.motion.maxSpeed = LIMP_KMH / 3.6;
+    this.onCrash?.(this.damage, Math.round(speed * 3.6));
+  }
+
+  repair() {
+    if (!this.needsRepair) return false;
+    this.damage = 0;
+    this.shake = 0;
+    this.car.settleRepair();
+    this.motion.maxSpeed = this.baseMaxSpeed;
+    this.onRepair?.();
+    return true;
   }
 
   enter() {
@@ -171,12 +255,19 @@ export class DrivingSystem {
     this.active = false;
     this.nearby = false;
     this.touchHandbrake = false;
+    this.damage = 0;
+    this.crashCooldown = 0;
+    this.shake = 0;
     this.motion.setPose(spawn[0], spawn[1], heading);
+    this.motion.maxSpeed = this.baseMaxSpeed;
+    this.car.resetDamage();
     this.collider.enabled = true;
     this.applyPose();
     this.updateCollider();
     this.car.update(0, { speed: 0, steer: 0 });
     this.marks.clear();
+    this.smoke.clear();
+    this.smokeTimer = 0;
     this.lastMark[0] = this.lastMark[1] = null;
   }
 

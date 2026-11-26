@@ -6,7 +6,30 @@ import { disposeObject3D } from '../utils/DisposeUtils.js';
 import { InspectionPartSelection } from './InspectionPartSelection.js';
 import { InspectionWorkbench } from './InspectionWorkbench.js';
 import { ManualWheelSession } from './ManualWheelSession.js';
-import { VEHICLE_PARTS } from '../vehicles/VehicleParts.js';
+import { VEHICLE_PARTS, inheritedPartId } from '../vehicles/VehicleParts.js';
+
+const QUICK_PRACTICES = [
+  { id: 'wheel', label: 'Trocar roda', part: 'front-wheel-left' },
+  { id: 'filter', label: 'Filtro de ar', part: 'filter' },
+  { id: 'battery', label: 'Bateria', part: 'battery' },
+  { id: 'lights', label: 'Luzes', part: 'lights' },
+  { id: 'wiper', label: 'Palheta do limpador', part: 'wiper-arm' },
+  { id: 'washer', label: 'Lavador de para-brisa', part: 'washer' },
+  { id: 'plugs', label: 'Vela de ignição', part: 'spark-plug' },
+  { id: 'pressure', label: 'Pressão dos pneus', part: 'tire-valve' },
+];
+
+const ENGINE_BAY_PARTS = new Set([
+  'filter',
+  'battery',
+  'engine',
+  'ignition-coil',
+  'spark-plug',
+  'washer',
+  'washer-cap',
+  'wiper-arm',
+  'wiper-blade',
+]);
 
 export class InspectionSession {
   constructor(engine, panel, onExit, { createOrbit, loadModel, progress, assemblyDefinition } = {}) {
@@ -14,6 +37,7 @@ export class InspectionSession {
     panel.onAction = id => this.partAction(id);
     panel.onOverview = () => this.overview();
     panel.onInterior = () => this.toggleInterior();
+    panel.onPractice = job => this.startPractice(job);
     this.createOrbit = createOrbit || ((camera, canvas) => new OrbitControls(camera, canvas));
     this.loadModel =
       loadModel ||
@@ -114,9 +138,36 @@ export class InspectionSession {
     this.workbench = new InspectionWorkbench(vehicle, this.assemblyDefinition, this.progress);
     this.selectedPart = null;
     this.panel.part?.(null, []);
+    this.panel.practices?.(this.practiceOptions());
     if (this.engine.renderer.domElement.addEventListener) {
       this.parts = new InspectionPartSelection(this, this.ownedModel || this.borrowed.root, Boolean(vehicle));
     }
+  }
+
+  practiceOptions() {
+    return this.workbench?.vehicle?.filter ? QUICK_PRACTICES : [];
+  }
+
+  startPractice(job) {
+    if (!this.active || !this.workbench?.vehicle) return;
+    const entry = QUICK_PRACTICES.find(item => item.id === job);
+    if (!entry) return;
+    if (this.manual?.active) {
+      if (job === 'wheel') {
+        this.manual.focus();
+        return;
+      }
+      this.manual.dispose();
+      this.manual = null;
+    }
+    this.restoreExterior();
+    const meta = VEHICLE_PARTS[entry.part];
+    this.selectedPart = {
+      id: entry.part,
+      name: meta?.name || entry.label,
+      description: meta?.description || '',
+    };
+    this.partAction(`start-${job}`);
   }
 
   selectPart(part) {
@@ -130,6 +181,10 @@ export class InspectionSession {
   renderPart(message) {
     const part = this.selectedPart;
     if (!part) return;
+    this.panel.practices?.(
+      this.practiceOptions(),
+      this.manual?.active ? 'wheel' : this.workbench?.job,
+    );
     if (this.manual?.active) {
       this.panel.part?.(
         {
@@ -149,12 +204,29 @@ export class InspectionSession {
       actions.push(...this.workbench.actions);
       actions.push({ id: 'stop-practice', label: 'Encerrar prática e restaurar peças' });
     } else {
-      if (['hood', 'engine', 'filter', 'battery'].includes(part.id) && vehicle?.hood)
+      if (
+        ['hood', 'engine', 'filter', 'battery', 'washer', 'washer-cap', 'ignition-coil', 'spark-plug'].includes(
+          part.id,
+        ) &&
+        vehicle?.hood
+      )
         actions.push({ id: 'hood', label: vehicle.hoodOpen ? 'Fechar capô' : 'Abrir capô' });
       const partId = part.actionId || part.id;
       const job = vehicle?.wheelStations?.has(partId)
         ? 'wheel'
-        : { filter: 'filter', battery: 'battery', lights: 'lights' }[partId];
+        : {
+            filter: 'filter',
+            battery: 'battery',
+            lights: 'lights',
+            'wiper-arm': 'wiper',
+            'wiper-blade': 'wiper',
+            washer: 'washer',
+            'washer-cap': 'washer',
+            'ignition-coil': 'plugs',
+            'spark-plug': 'plugs',
+            'tire-valve': 'pressure',
+            'tire-gauge': 'pressure',
+          }[partId];
       if (job && vehicle?.filter && (job !== 'wheel' || this.assemblyDefinition))
         actions.push({
           id: `start-${job}`,
@@ -163,12 +235,42 @@ export class InspectionSession {
             battery: 'Testar bateria',
             lights: 'Praticar teste das luzes',
             wheel: 'Trocar roda — interação manual',
+            wiper: 'Trocar a palheta do limpador',
+            washer: 'Completar o lavador de para-brisa',
+            plugs: 'Trocar a vela de ignição',
+            pressure: 'Calibrar a pressão dos pneus',
           }[job],
         });
       if (part.id === 'lights' && vehicle?.headlightMaterial)
         actions.push({ id: 'lights-toggle', label: vehicle.lightsOn ? 'Apagar faróis' : 'Acender faróis' });
     }
     this.panel.part?.(part, actions, message || this.workbench.instruction);
+  }
+
+  focusTarget(part = this.selectedPart) {
+    if (!part) return this.orbit.target.clone();
+    if (part.localPoint && part.object) return part.object.localToWorld(part.localPoint.clone());
+    if (part.point?.isVector3) return part.point.clone();
+    const root = this.workbench?.vehicle?.group;
+    if (root) {
+      root.updateWorldMatrix(true, true);
+      const bounds = new THREE.Box3();
+      let found = false;
+      root.traverse(object => {
+        if (!object.isMesh || inheritedPartId(object) !== part.id) return;
+        bounds.expandByObject(object);
+        found = true;
+      });
+      if (found) return bounds.getCenter(new THREE.Vector3());
+    }
+    return this.orbit.target.clone();
+  }
+
+  focusDirection(part, target) {
+    const vehicle = this.workbench?.vehicle;
+    if (!vehicle?.group || !ENGINE_BAY_PARTS.has(part.actionId || part.id)) return null;
+    const side = vehicle.group.worldToLocal(target.clone()).z >= 0 ? 1 : -1;
+    return new THREE.Vector3(-0.9, 1.15, side * 0.85).normalize();
   }
 
   partAction(id) {
@@ -212,15 +314,14 @@ export class InspectionSession {
     if (this.manual?.active) return;
     const v = this.workbench.vehicle;
     if (id === 'focus') {
-      const offset = this.camera.position
-        .clone()
-        .sub(this.orbit.target)
-        .setLength(Math.max(1.4, this.orbit.minDistance * 2));
-      const target = this.selectedPart.localPoint
-        ? this.selectedPart.object.localToWorld(this.selectedPart.localPoint.clone())
-        : this.selectedPart.point;
+      const target = this.focusTarget();
+      const offset =
+        this.focusDirection(this.selectedPart, target) ||
+        this.camera.position.clone().sub(this.orbit.target);
+      if (offset.lengthSq() < 1e-6) offset.set(1, 0.5, 1);
+      offset.setLength(Math.max(1.4, this.orbit.minDistance * 2));
       this.orbit.target.copy(target);
-      this.camera.position.copy(this.orbit.target).add(offset);
+      this.camera.position.copy(target).add(offset);
       this.orbit.update();
       return;
     }

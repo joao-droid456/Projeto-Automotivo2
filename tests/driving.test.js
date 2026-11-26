@@ -126,6 +126,45 @@ test('pátio externo cria pista, vegetação e cerca com vão no portão', () =>
   }
 });
 
+test('derrapagem solta fumaça em puffs reciclados que se dissipam ao parar', () => {
+  const scene = new THREE.Scene();
+  const collision = new CollisionSystem(config.playerRadius);
+  const camera = new THREE.PerspectiveCamera();
+  const controls = {
+    keys: new Set(), stick: { x: 0, y: 0 }, active: true, yaw: 0, pitch: 0,
+    clear() { this.keys.clear(); this.stick.x = this.stick.y = 0; },
+    applyRotation() {},
+  };
+  const engine = {
+    scene, camera, collision, controls, config,
+    outdoor: { layout: { spawn: config.driving.spawn, heading: config.driving.heading } },
+  };
+  const driving = new DrivingSystem(engine);
+  camera.position.set(config.driving.spawn[0], config.eyeHeight, config.driving.spawn[1] + 2);
+  assert.equal(driving.enter(), true);
+  controls.keys.add('KeyW');
+  for (let i = 0; i < 300; i++) driving.update(1 / 60);
+  assert.equal(driving.smoke.live, 0);
+  controls.keys.add('KeyD');
+  controls.keys.add('Space');
+  let peak = 0;
+  for (let i = 0; i < 90; i++) {
+    driving.update(1 / 60);
+    peak = Math.max(peak, driving.smoke.live);
+  }
+  assert.ok(peak > 0, 'nenhuma fumaça emitida');
+  assert.equal(driving.smoke.mesh.visible, true);
+  assert.ok([...driving.smoke.opacities.array].some(value => value > 0));
+  assert.equal(driving.smoke.mesh.count, driving.smoke.particles.length);
+  controls.keys.clear();
+  assert.equal(driving.exit(), true);
+  for (let i = 0; i < 180; i++) driving.update(1 / 60);
+  assert.equal(driving.smoke.live, 0);
+  assert.equal(driving.smoke.mesh.visible, false);
+  driving.reset();
+  assert.equal(driving.smoke.live, 0);
+});
+
 test('carro dirigível entra, acelera, freia e devolve o jogador ao sair', () => {
   const scene = new THREE.Scene();
   const collision = new CollisionSystem(config.playerRadius);
@@ -158,4 +197,116 @@ test('carro dirigível entra, acelera, freia e devolve o jogador ao sair', () =>
   assert.ok(driving.car.group.position.equals(new THREE.Vector3(driving.motion.x, 0, driving.motion.z)));
   driving.reset();
   assert.deepEqual([driving.motion.x, driving.motion.z], config.driving.spawn);
+});
+
+function drivingRig() {
+  const scene = new THREE.Scene();
+  const collision = new CollisionSystem(config.playerRadius);
+  const camera = new THREE.PerspectiveCamera();
+  const controls = {
+    keys: new Set(), stick: { x: 0, y: 0 }, active: true, yaw: 0, pitch: 0,
+    clear() { this.keys.clear(); this.stick.x = this.stick.y = 0; },
+    applyRotation() {},
+  };
+  const engine = {
+    scene, camera, collision, controls, config,
+    outdoor: { layout: { spawn: config.driving.spawn, heading: config.driving.heading } },
+  };
+  const driving = new DrivingSystem(engine);
+  camera.position.set(config.driving.spawn[0], config.eyeHeight, config.driving.spawn[1]);
+  return { driving, controls, collision, camera };
+}
+
+test('batida em alta velocidade amassa o carro e a funilaria manual restaura', () => {
+  const { driving, controls, collision } = drivingRig();
+  const [sx, sz] = config.driving.spawn;
+  collision.addBox(sx + 30, sz, 6, 6, 'muro de teste');
+  assert.equal(driving.enter(), true);
+  let impact = 0;
+  driving.onCrash = (damage, kmh) => { impact = kmh; };
+  controls.keys.add('KeyW');
+  let hit = false;
+  for (let i = 0; i < 60 * 8 && !hit; i++) {
+    driving.update(1 / 60);
+    hit = driving.needsRepair;
+  }
+  controls.keys.clear();
+  assert.ok(hit, 'o carro não colidiu com o muro');
+  assert.ok(impact >= 25, `impacto a ${impact} km/h`);
+  assert.ok(driving.damage > 0.25);
+  assert.equal(driving.car.damage, driving.damage);
+  const dents = driving.car.dentPool.filter(lump => lump.visible);
+  assert.ok(dents.length >= 2);
+  for (const lump of dents) {
+    assert.ok(Math.abs(lump.position.x) <= 2.03);
+    assert.ok(Math.abs(lump.position.z) <= 0.87);
+    assert.ok(lump.position.y >= 0.33 && lump.position.y <= 1.11);
+  }
+  assert.equal(driving.needsRepair, true);
+  assert.equal(driving.car.repairZone(), 'front');
+  const point = new THREE.Vector3(), normal = new THREE.Vector3();
+  assert.equal(driving.car.repairFocus(point, normal), 'front');
+  assert.ok(Math.abs(normal.length() - 1) < 0.01);
+  assert.ok(point.distanceTo(driving.car.group.position) < 3.2);
+  assert.equal(driving.car.hammerDent(), true);
+  assert.equal(driving.car.dentPool.filter(lump => lump.visible).length, dents.length - 1);
+  driving.car.installRepairPanel();
+  assert.equal(driving.car.dentPool.some(lump => lump.visible), false);
+  assert.equal(driving.car.repairPlate.visible, true);
+  let repairs = 0;
+  driving.onRepair = () => { repairs++; };
+  assert.equal(driving.repair(), true);
+  assert.equal(repairs, 1);
+  assert.equal(driving.damage, 0);
+  assert.equal(driving.car.damage, 0);
+  assert.equal(driving.needsRepair, false);
+  assert.equal(driving.car.dentPool.some(lump => lump.visible), false);
+  assert.equal(driving.car.repairPlate.visible, true, 'a peça nova permanece instalada');
+  assert.equal(driving.motion.maxSpeed, driving.baseMaxSpeed);
+  assert.equal(driving.repair(), false);
+  driving.reset();
+  assert.equal(driving.car.repairPlate.visible, false);
+});
+
+test('pista livre em alta velocidade não causa dano fantasma', () => {
+  const { driving, controls } = drivingRig();
+  assert.equal(driving.enter(), true);
+  controls.keys.add('KeyW');
+  for (let i = 0; i < 60 * 20; i++) driving.update(1 / 60);
+  assert.ok(driving.motion.speedKmh > 120, `velocidade ${driving.motion.speedKmh}`);
+  assert.equal(driving.damage, 0);
+  assert.equal(driving.needsRepair, false);
+});
+
+test('toque leve não amassa e dano grave limita a velocidade até o reparo', () => {
+  const { driving, controls, collision } = drivingRig();
+  const [sx, sz] = config.driving.spawn;
+  collision.addBox(sx + 4.8, sz, 6, 6, 'muro próximo');
+  assert.equal(driving.enter(), true);
+  controls.keys.add('KeyW');
+  for (let i = 0; i < 180; i++) driving.update(1 / 60);
+  controls.keys.clear();
+  assert.equal(driving.damage, 0);
+  assert.equal(driving.car.dentPool.some(lump => lump.visible), false);
+
+  driving.crash(30, 1, 0);
+  driving.crash(30, 1, 0);
+  driving.crash(30, 1, 0);
+  assert.equal(driving.damage, 1);
+  assert.ok(Math.abs(driving.motion.maxSpeed * 3.6 - 55) < 0.6);
+  assert.ok(driving.car.dentPool.filter(lump => lump.visible).length <= 18);
+  driving.reset();
+  assert.equal(driving.damage, 0);
+  assert.equal(driving.motion.maxSpeed, driving.baseMaxSpeed);
+  assert.equal(driving.car.dentPool.some(lump => lump.visible), false);
+});
+
+test('limite de velocidade do dano respeita o teto do veículo', () => {
+  const motion = new VehicleMotion({ position: [0, 0], heading: 0 });
+  motion.maxSpeed = 55 / 3.6;
+  simulate(motion, 25, { throttle: 1 });
+  assert.ok(motion.speedKmh <= 55.4, `limite ignorado: ${motion.speedKmh}`);
+  motion.maxSpeed = 150;
+  simulate(motion, 25, { throttle: 1 });
+  assert.ok(motion.speedKmh > 140);
 });

@@ -5,7 +5,7 @@ export class InspectionPanel {
     this.element.setAttribute('role', 'dialog');
     this.element.setAttribute('aria-modal', 'true');
     this.element.setAttribute('aria-labelledby', 'inspection-title');
-    this.element.innerHTML = `<img class="inspection-background" alt="" aria-hidden="true"><div class="inspection-window"><header class="inspection-header"><div><small>INSPEÇÃO E MANUTENÇÃO</small><h1 id="inspection-title"></h1></div><div class="inspection-header-actions"><button type="button" data-overview>Ver carro inteiro</button><button class="primary" type="button" data-back>Voltar à oficina</button></div></header><div class="inspection-content"><div class="inspection-stage"><div class="inspection-canvas"></div><div class="inspection-tooltip hidden" role="tooltip"><strong></strong><span></span><small>Clique para mexer ou examinar</small></div><p class="inspection-stage-hint">Arraste para girar · Role para aproximar</p></div><aside class="inspection-part"><small>COMPONENTE SELECIONADO</small><h2></h2><p data-description></p><div class="inspection-part-actions"></div><p data-feedback role="status" aria-live="polite"></p></aside></div><footer class="inspection-footer"><p role="status" aria-live="polite"></p></footer></div>`;
+    this.element.innerHTML = `<img class="inspection-background" alt="" aria-hidden="true"><div class="inspection-window"><header class="inspection-header"><div><small>INSPEÇÃO E MANUTENÇÃO</small><h1 id="inspection-title"></h1></div><div class="inspection-header-actions"><button type="button" data-overview>Ver carro inteiro</button><button class="primary" type="button" data-back>Voltar à oficina</button></div></header><div class="inspection-content"><div class="inspection-stage"><div class="inspection-canvas"></div><div class="inspection-tooltip hidden" role="tooltip"><strong></strong><span></span><small>Clique para mexer ou examinar</small></div><p class="inspection-stage-hint">Arraste para girar · Role para aproximar</p></div><aside class="inspection-part"><div class="inspection-practices hidden" aria-label="Práticas do carro didático"></div><small>COMPONENTE SELECIONADO</small><h2></h2><p data-description></p><div class="inspection-part-actions"></div><p data-feedback role="status" aria-live="polite"></p></aside></div><footer class="inspection-footer"><p role="status" aria-live="polite"></p></footer></div>`;
     this.button = this.element.querySelector('[data-back]');
     this.interiorButton = document.createElement('button');
     this.interiorButton.type = 'button';
@@ -86,6 +86,7 @@ export class InspectionPanel {
   show(name) {
     this.element.querySelector('h1').textContent = name;
     this.element.classList.remove('hidden');
+    this.practices([]);
     this.part(null, []);
     this.button.focus();
   }
@@ -98,6 +99,25 @@ export class InspectionPanel {
     const rect = this.viewport.getBoundingClientRect();
     this.tooltip.style.left = `${Math.max(8, Math.min(x - rect.left + 16, rect.width - 268))}px`;
     this.tooltip.style.top = `${Math.max(8, Math.min(y - rect.top + 18, rect.height - 150))}px`;
+  }
+
+  practices(list = [], activeId = null) {
+    const box = this.element.querySelector('.inspection-practices');
+    box.classList.toggle('hidden', !list.length);
+    box.replaceChildren();
+    if (!list.length) return;
+    const label = document.createElement('small');
+    label.textContent = 'PRÁTICAS · CLIQUE PARA COMEÇAR';
+    box.append(label);
+    for (const item of list) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.practice = item.id;
+      button.textContent = item.label;
+      button.setAttribute('aria-pressed', String(item.id === activeId));
+      button.onclick = () => this.onPractice?.(item.id);
+      box.append(button);
+    }
   }
 
   part(part, actions, message = '') {

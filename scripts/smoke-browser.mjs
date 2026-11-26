@@ -128,8 +128,8 @@ try {
   await evaluate(
     "document.querySelector('#activities-close').click(); document.querySelector('#practice').click()",
   );
-  assert.equal(await evaluate("!document.querySelector('#assembly').classList.contains('hidden')"), true);
-  report.checks.push('Percursos e prática de montagem acessíveis pela interface real');
+  await waitFor("!document.querySelector('.vehicle-inspection').classList.contains('hidden')");
+  report.checks.push('Percursos e práticas do carro acessíveis pela interface real');
 
   // Use the actual touch surface to aim at the practice car, click it and exercise the menu.
   await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
@@ -175,7 +175,7 @@ try {
   await send('Page.navigate', { url: `${baseURL}/tests/browser-harness.html` });
   await waitFor('Boolean(window.smoke)');
   report.integration = await evaluate(`(() => {
-    const { engine, station, interaction, oil, assembly } = smoke;
+    const { engine, station, interaction, oil } = smoke;
     engine.loop.stop();
     const vehicle = engine.world.vehicle;
     const start = engine.camera.position.clone();
@@ -195,17 +195,14 @@ try {
     oil.close();
     engine.camera.position.set(0, 1.65, 0);
     const lowered = lift.activate(); lift.advance(4);
-    assembly.open();
-    const assemblyOpened = assembly.active;
-    assembly.close();
     engine.renderer.render(engine.scene, engine.camera);
     return { moved, selectedLift, raised, oilOpened, lock, lowered: lowered && lift.height === 0,
-      assemblyOpened, cars: engine.world.lifts.length + Number(Boolean(vehicle.group)),
+      cars: engine.world.lifts.length + Number(Boolean(vehicle.group)),
       calls: engine.renderer.info.render.calls, triangles: engine.renderer.info.render.triangles,
       geometries: engine.renderer.info.memory.geometries, textures: engine.renderer.info.memory.textures,
       webgl: engine.renderer.getContext().getParameter(engine.renderer.getContext().VERSION) };
   })()`);
-  for (const key of ['moved', 'selectedLift', 'raised', 'oilOpened', 'lock', 'lowered', 'assemblyOpened'])
+  for (const key of ['moved', 'selectedLift', 'raised', 'oilOpened', 'lock', 'lowered'])
     assert.equal(report.integration[key], true, key);
   assert.ok(report.integration.calls > 0);
   report.checks.push(
@@ -578,8 +575,8 @@ try {
     'Todos os veículos selecionáveis; cena exclusiva, estado/elevador preservados, câmera orbital e GLB sob demanda verificados',
   );
   report.disposal = await evaluate(`(() => {
-    const { engine, oil, assembly, ui, inspection, selection } = smoke;
-    selection.dispose(); inspection.dispose(); oil.dispose(); assembly.dispose(); engine.dispose(); engine.dispose(); ui.dispose();
+    const { engine, oil, ui, inspection, selection } = smoke;
+    selection.dispose(); inspection.dispose(); oil.dispose(); engine.dispose(); engine.dispose(); ui.dispose();
     return { canvases: document.querySelectorAll('#viewport canvas').length, items: engine.registry.items.size, running: engine.loop.running };
   })()`);
   assert.deepEqual(report.disposal, { canvases: 0, items: 0, running: false });

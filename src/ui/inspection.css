@@ -116,6 +116,30 @@
   font-size: 12px;
   line-height: 1.7;
 }
+.inspection-practices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #ffffff16;
+}
+.inspection-practices > small {
+  grid-column: 1 / -1;
+  color: #a9bfcb;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+}
+.inspection-practices button {
+  text-align: left;
+  font-size: 11px;
+  padding: 8px 9px;
+}
+.inspection-practices button[aria-pressed='true'] {
+  border-color: #e8c66d;
+  background: #e8c66d22;
+  color: #f2d893;
+}
 .inspection-part-actions {
   display: grid;
   gap: 9px;

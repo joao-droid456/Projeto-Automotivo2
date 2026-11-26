@@ -21,6 +21,7 @@ export class VehicleMotion {
     this.longitudinalSpeed = 0;
     this.lateralSpeed = 0;
     this.drifting = false;
+    this.maxSpeed = MAX_FORWARD;
   }
 
   get speed() {
@@ -77,7 +78,7 @@ export class VehicleMotion {
     if (handbrake) long -= Math.sign(long) * Math.min(Math.abs(long), 1.8 * h);
     if (throttle === 0 && Math.abs(long) < 0.25) long = 0;
     long -= Math.abs(lat) * (handbrake ? 0.12 : 0.05) * h;
-    long = clamp(long, -MAX_REVERSE, MAX_FORWARD);
+    long = clamp(long, -MAX_REVERSE, Math.max(-MAX_REVERSE, Math.min(MAX_FORWARD, this.maxSpeed)));
 
     const speedFactor = Math.min(1, Math.abs(long) / 4);
     const steerRate = (handbrake ? 3.6 : 2.4) * speedFactor / (1 + Math.abs(long) * 0.022) * (long < -0.2 ? -1 : 1);

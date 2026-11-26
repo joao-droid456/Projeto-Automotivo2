@@ -18,6 +18,7 @@ export class AppUI {
         <div id="objective" class="objective"></div><div class="crosshair" aria-hidden="true"></div>
         <button id="interact" class="interact hidden"><span class="key">E</span><span><strong id="target-name"></strong><small id="target-action">Conhecer equipamento · demonstração</small></span></button>
         <div id="drive-hud" class="hidden" aria-live="off"><span class="drive-readout"><strong id="drive-speed">0</strong><small>km/h</small></span><span id="drive-gear">N</span><button id="touch-brake" aria-label="Freio de mão">FREIO DE MÃO</button></div>
+        <div id="repair-card" class="repair-card hidden"><strong>Carro amassado</strong><small id="repair-label">Pare e saia do carro (E) para reparar a carroceria no chão</small></div>
         <div class="hud-bottom"><span id="mode-label">EXPLORAÇÃO LIVRE</span><span class="desktop-hint">W A S D · mover &nbsp; Mouse · olhar &nbsp; ESC · pausar</span><span id="progress-label"></span></div>
         <div id="mobile-controls"><div id="look-zone" aria-label="Arraste para olhar"></div><div id="joystick" aria-label="Joystick de movimento"><div id="stick"></div></div><span class="touch-tip">Arraste à direita para olhar</span></div>
       </div>
@@ -53,6 +54,11 @@ export class AppUI {
       this.driveVisible = active;
       this.show('drive-hud', active);
     }
+    const damaged = active && Boolean(driving.needsRepair);
+    if (this.repairVisible !== damaged) {
+      this.repairVisible = damaged;
+      this.show('repair-card', damaged);
+    }
     if (!active) return;
     const speed = Math.round(Math.abs(driving.motion.speedKmh));
     const gear = driving.motion.gear;
@@ -82,14 +88,14 @@ export class AppUI {
   updateProgress(progress) {
     const result = progress.data.completed['preparar-bancada'];
     const practice = progress.data.completed['montagem-roda'] || Object.entries(progress.data.completed).find(([id]) => id.startsWith('montagem-roda:'))?.[1];
-    const services = Number(Boolean(practice)) + ['filter', 'battery', 'lights'].filter(id => progress.data.completed[`servico-${id}`]).length
+    const services = Number(Boolean(practice)) + ['filter', 'battery', 'lights', 'wiper', 'washer', 'plugs', 'pressure'].filter(id => progress.data.completed[`servico-${id}`]).length
       + ['corolla', 'hb20', 'gol'].filter(id => progress.data.completed[`troca-oleo-${id}`]).length;
     if (services) {
-      this.$('home-progress').textContent = `✓ ${services}/7 práticas concluídas no carro`;
-      this.$('progress-label').textContent = `OFICINA ${services}/7`;
+      this.$('home-progress').textContent = `✓ ${services}/11 práticas concluídas no carro`;
+      this.$('progress-label').textContent = `OFICINA ${services}/11`;
       return;
     }
-    this.$('home-progress').textContent = practice ? `✓ Montagem de roda concluída · aproveitamento ${practice.score}%` : result ? `✓ Fundamentos da bancada · ${result.score}/${result.total} respostas corretas` : 'Roda, filtro, bateria e luzes: escolha o que fazer no carro.';
+    this.$('home-progress').textContent = practice ? `✓ Montagem de roda concluída · aproveitamento ${practice.score}%` : result ? `✓ Fundamentos da bancada · ${result.score}/${result.total} respostas corretas` : 'Clique no carro didático: roda, filtro, bateria, luzes, palheta, lavador, velas e pneus.';
     this.$('progress-label').textContent = practice ? `MONTAGEM ${practice.score}%` : 'PRÁTICA 3D + BANCADA';
   }
 }

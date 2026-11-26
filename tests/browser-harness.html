@@ -10,7 +10,6 @@
       import { AppUI } from '/src/ui/AppUI.js';
       import { ProgressSystem } from '/src/systems/ProgressSystem.js';
       import { InteractionSystem } from '/src/systems/InteractionSystem.js';
-      import { AssemblySession } from '/src/systems/AssemblySession.js';
       import { OilChangeSession } from '/src/systems/OilChangeSession.js';
       import { MaintenanceStation } from '/src/objects/MaintenanceStation.js';
       import { collectInspectableVehicles } from '/src/vehicles/InspectableVehicles.js';
@@ -32,15 +31,14 @@
       engine.registry.attach(station);
       const progress = new ProgressSystem(null), audio = { play() {} };
       const oil = new OilChangeSession(engine, ui, progress, audio, () => {});
-      const assembly = new AssemblySession(engine, ui, definition, progress, audio, () => {});
       const interaction = new InteractionSystem(engine);
       ui.show('loading', false);
-      engine.start(dt => { assembly.update(dt); oil.update(dt); });
+      engine.start(dt => { oil.update(dt); });
       const vehicles = collectInspectableVehicles(engine);
       const inspection = new InspectionSession(engine, new InspectionPanel(document.querySelector('#app'), () => inspection.close()), () => {}, { progress, assemblyDefinition: definition });
       let selectedVehicle = null;
       const selection = new VehicleSelection(engine, vehicles, vehicle => { selectedVehicle = vehicle; }, () => !inspection.active);
-      window.smoke = { engine, ui, oil, assembly, station, interaction, inspection, vehicles, selection, THREE, get selectedVehicle() { return selectedVehicle; } };
+      window.smoke = { engine, ui, oil, station, interaction, inspection, vehicles, selection, THREE, get selectedVehicle() { return selectedVehicle; } };
     </script>
   </body>
 </html>
